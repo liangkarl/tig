@@ -652,9 +652,6 @@ status_update(struct view *view)
 		return false;
 	}
 
-	if (line->type != LINE_STAT_STAGED && !no_files_staged)
-		view->pos.lineno += 1;
-
 	return true;
 }
 
