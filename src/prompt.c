@@ -223,6 +223,12 @@ readline_variable_generator(const char *text, int state)
 #define FORMAT_VAR(type, name) "%(repo:" #name ")",
 		REPO_INFO(FORMAT_VAR)
 #undef FORMAT_VAR
+		"%(author)",
+		"%(author-email)",
+		"%(author-date)",
+		"%(committer)",
+		"%(committer-email)",
+		"%(commit-date)",
 		NULL
 	};
 
