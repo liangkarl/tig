@@ -651,7 +651,7 @@ main_select(struct view *view, struct line *line)
 	if (line->type == LINE_STAT_STAGED || line->type == LINE_STAT_UNSTAGED || line->type == LINE_STAT_UNTRACKED) {
 		string_ncopy(view->ref, commit->title, strlen(commit->title));
 		status_stage_info(view->env->status, line->type, NULL);
-		argv_env_set_authors(view->env, NULL, NULL);
+		argv_env_set_authors(view->env, NULL, NULL, NULL, NULL);
 	} else {
 		struct main_state *state = view->private;
 		const struct ref *ref = main_get_commit_refs(line, commit);
@@ -663,7 +663,8 @@ main_select(struct view *view, struct line *line)
 		} else {
 			string_copy_rev(view->ref, commit->id);
 		}
-		argv_env_set_authors(view->env, commit->author, commit->committer);
+		argv_env_set_authors(view->env, commit->author, &commit->author_time,
+				     commit->committer, &commit->commit_time);
 		if (ref)
 			ref_update_env(view->env, ref, true);
 		else
