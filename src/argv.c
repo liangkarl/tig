@@ -15,6 +15,7 @@
 #include "tig/argv.h"
 #include "tig/repo.h"
 #include "tig/options.h"
+#include "tig/util.h"
 #include "tig/prompt.h"
 
 static bool
@@ -443,6 +444,10 @@ argv_format(struct argv_env *argv_env, const char ***dst_argv, const char *src_a
 #define FORMAT_REPO_VAR(type, name) \
 	{ "%(repo:" #name ")", STRING_SIZE("%(repo:" #name ")"), type ## _formatter, &repo.name, "" },
 		REPO_INFO(FORMAT_REPO_VAR)
+		{ "%(author)", STRING_SIZE("%(author)"), argv_string_formatter, &argv_env->author, "" },
+		{ "%(author-email)", STRING_SIZE("%(author-email)"), argv_string_formatter, &argv_env->author_email, "" },
+		{ "%(committer)", STRING_SIZE("%(committer)"), argv_string_formatter, &argv_env->committer, "" },
+		{ "%(committer-email)", STRING_SIZE("%(committer-email)"), argv_string_formatter, &argv_env->committer_email, "" },
 	};
 	struct format_context format = { vars, ARRAY_SIZE(vars), "", 0, flags };
 	int argc;
@@ -491,6 +496,20 @@ argv_format(struct argv_env *argv_env, const char ***dst_argv, const char *src_a
 	}
 
 	return src_argv[argc] == NULL;
+}
+
+void
+argv_env_set_authors(struct argv_env *argv_env, const struct ident *author, const struct ident *committer)
+{
+	const char *author_name = author && author->name ? author->name : "";
+	const char *author_email = author && author->email ? author->email : "";
+	const char *committer_name = committer && committer->name ? committer->name : "";
+	const char *committer_email = committer && committer->email ? committer->email : "";
+
+	string_ncopy(argv_env->author, author_name, strlen(author_name));
+	string_ncopy(argv_env->author_email, author_email, strlen(author_email));
+	string_ncopy(argv_env->committer, committer_name, strlen(committer_name));
+	string_ncopy(argv_env->committer_email, committer_email, strlen(committer_email));
 }
 
 static inline bool
