@@ -16,6 +16,7 @@
 #include "tig/draw.h"
 #include "tig/log.h"
 #include "tig/diff.h"
+#include "tig/parse.h"
 #include "tig/pager.h"
 
 struct log_state {
@@ -40,6 +41,85 @@ log_copy_rev(struct view *view, struct line *line)
 	view->env->blob[0] = 0;
 }
 
+static const struct ident *
+log_parse_pretty_ident(const char *line, const char *prefix)
+{
+	char text[SIZEOF_STR];
+	char *ident = text;
+	char *email = NULL;
+	char *name_end;
+	char *email_end;
+
+	string_ncopy(text, line, strlen(line));
+
+	if (!prefixcmp(ident, prefix))
+		return NULL;
+
+	ident = string_trim(ident + strlen(prefix));
+	email = strchr(ident, '<');
+	if (!email)
+		return get_author(ident, "");
+
+	name_end = email;
+	while (name_end > ident && isspace((unsigned char) name_end[-1]))
+		name_end--;
+	*name_end = 0;
+
+	email++;
+	email_end = strchr(email, '>');
+	if (!email_end)
+		return get_author(ident, "");
+	*email_end = 0;
+
+	return get_author(ident, email);
+}
+
+static void
+log_set_authors(struct view *view, struct line *line)
+{
+	const struct ident *author = NULL;
+	const struct ident *committer = NULL;
+	struct line *commit_line = find_prev_line_by_type(view, line, LINE_COMMIT);
+	struct line *entry;
+
+	if (!commit_line)
+		return;
+
+	for (entry = commit_line + 1; entry < view->line + view->lines; entry++) {
+		const char *text = box_text(entry);
+		size_t offset;
+		char *trimmed;
+
+		if (entry->type == LINE_COMMIT)
+			break;
+
+		offset = get_graph_indent(text);
+		trimmed = (char *) text + offset;
+
+		if (!*trimmed)
+			break;
+
+		if (entry->type == LINE_AUTHOR) {
+			struct time author_time;
+			parse_author_line(trimmed + STRING_SIZE("author "), &author, &author_time);
+			continue;
+		}
+
+		if (entry->type == LINE_COMMITTER) {
+			struct time commit_time;
+			parse_author_line(trimmed + STRING_SIZE("committer "), &committer, &commit_time);
+			continue;
+		}
+
+		if (!author)
+			author = log_parse_pretty_ident(trimmed, "Author:");
+		if (!committer)
+			committer = log_parse_pretty_ident(trimmed, "Commit:");
+	}
+
+	argv_env_set_authors(view->env, author, committer);
+}
+
 static void
 log_select(struct view *view, struct line *line)
 {
@@ -58,6 +138,7 @@ log_select(struct view *view, struct line *line)
 	if (line->type == LINE_COMMIT && !view_has_flags(view, VIEW_NO_REF))
 		log_copy_rev(view, line);
 	string_copy_rev(view->env->commit, view->ref);
+	log_set_authors(view, line);
 	string_ncopy(view->env->text, text, strlen(text));
 	state->last_lineno = line->lineno;
 	state->last_type = line->type;
