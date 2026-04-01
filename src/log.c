@@ -28,6 +28,7 @@ struct log_state {
 	bool commit_title_read;
 	bool after_commit_header;
 	bool reading_diff_stat;
+	char author_id[SIZEOF_REV];
 };
 
 static inline void
@@ -58,6 +59,12 @@ log_select(struct view *view, struct line *line)
 	if (line->type == LINE_COMMIT && !view_has_flags(view, VIEW_NO_REF))
 		log_copy_rev(view, line);
 	string_copy_rev(view->env->commit, view->ref);
+	if (strcmp(state->author_id, view->ref)) {
+		if (argv_env_set_commit(view->env, view->ref))
+			string_copy_rev(state->author_id, view->ref);
+		else
+			state->author_id[0] = 0;
+	}
 	string_ncopy(view->env->text, text, strlen(text));
 	state->last_lineno = line->lineno;
 	state->last_type = line->type;

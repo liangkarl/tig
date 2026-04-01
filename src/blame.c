@@ -492,8 +492,10 @@ blame_select(struct view *view, struct line *line)
 	struct blame_commit *commit = blame->commit;
 	const char *text = blame->text;
 
-	if (!commit)
+	if (!commit) {
+		argv_env_set_authors(view->env, NULL, NULL, NULL, NULL);
 		return;
+	}
 
 	if (string_rev_is_null(commit->id)) {
 		view->env->commit[0] = 0;
@@ -510,6 +512,8 @@ blame_select(struct view *view, struct line *line)
 
 	view->env->lineno = view->pos.lineno + 1;
 	string_ncopy(view->env->text, text, strlen(text));
+	argv_env_set_authors(view->env, commit->author, &commit->author_time,
+			     commit->committer, &commit->commit_time);
 	view->env->blob[0] = 0;
 }
 

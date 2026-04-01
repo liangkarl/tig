@@ -261,12 +261,15 @@ refs_select(struct view *view, struct line *line)
 
 	if (refs_is_all(reference)) {
 		string_copy(view->ref, REFS_ALL_NAME);
+		argv_env_set_authors(view->env, NULL, NULL, NULL, NULL);
 		return;
 	}
 	string_copy_rev(view->ref, reference->ref->id);
 	string_copy_rev(view->env->head, reference->ref->id);
 	string_ncopy(view->env->ref, reference->ref->name, strlen(reference->ref->name));
 	ref_update_env(view->env, reference->ref, false);
+	argv_env_set_authors(view->env, reference->author, &reference->author_time,
+			     reference->committer, &reference->commit_time);
 	view->env->blob[0] = 0;
 }
 
