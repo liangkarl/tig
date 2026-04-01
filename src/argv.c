@@ -446,8 +446,10 @@ argv_format(struct argv_env *argv_env, const char ***dst_argv, const char *src_a
 		REPO_INFO(FORMAT_REPO_VAR)
 		{ "%(author)", STRING_SIZE("%(author)"), argv_string_formatter, &argv_env->author, "" },
 		{ "%(author-email)", STRING_SIZE("%(author-email)"), argv_string_formatter, &argv_env->author_email, "" },
+		{ "%(author-date)", STRING_SIZE("%(author-date)"), argv_string_formatter, &argv_env->author_date, "" },
 		{ "%(committer)", STRING_SIZE("%(committer)"), argv_string_formatter, &argv_env->committer, "" },
 		{ "%(committer-email)", STRING_SIZE("%(committer-email)"), argv_string_formatter, &argv_env->committer_email, "" },
+		{ "%(commit-date)", STRING_SIZE("%(commit-date)"), argv_string_formatter, &argv_env->commit_date, "" },
 	};
 	struct format_context format = { vars, ARRAY_SIZE(vars), "", 0, flags };
 	int argc;
@@ -499,17 +501,28 @@ argv_format(struct argv_env *argv_env, const char ***dst_argv, const char *src_a
 }
 
 void
-argv_env_set_authors(struct argv_env *argv_env, const struct ident *author, const struct ident *committer)
+argv_env_set_authors(struct argv_env *argv_env,
+		     const struct ident *author, const struct time *author_time,
+		     const struct ident *committer, const struct time *commit_time)
 {
 	const char *author_name = author && author->name ? author->name : "";
 	const char *author_email = author && author->email ? author->email : "";
+	const char *author_date = author_time ? mkdate(author_time, DATE_CUSTOM, false, "%Y-%m-%d %H:%M:%S %z") : "";
 	const char *committer_name = committer && committer->name ? committer->name : "";
 	const char *committer_email = committer && committer->email ? committer->email : "";
+	const char *committer_date = commit_time ? mkdate(commit_time, DATE_CUSTOM, false, "%Y-%m-%d %H:%M:%S %z") : "";
+
+	if (!author_date)
+		author_date = "";
+	if (!committer_date)
+		committer_date = "";
 
 	string_ncopy(argv_env->author, author_name, strlen(author_name));
 	string_ncopy(argv_env->author_email, author_email, strlen(author_email));
+	string_ncopy(argv_env->author_date, author_date, strlen(author_date));
 	string_ncopy(argv_env->committer, committer_name, strlen(committer_name));
 	string_ncopy(argv_env->committer_email, committer_email, strlen(committer_email));
+	string_ncopy(argv_env->commit_date, committer_date, strlen(committer_date));
 }
 
 static inline bool

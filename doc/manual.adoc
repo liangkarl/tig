@@ -163,6 +163,14 @@ following variables.
 |=============================================================================
 |%(head)		|The currently viewed 'head' ID. Defaults to HEAD
 |%(commit)		|The currently selected commit ID.
+|%(author)		|The currently selected commit author name.
+|%(author-email)	|The currently selected commit author email.
+|%(author-date)	|The currently selected author date in
+			 `YYYY-MM-DD HH:MM:SS +ZZZZ` format.
+|%(committer)		|The currently selected commit committer name.
+|%(committer-email)	|The currently selected commit committer email.
+|%(commit-date)		|The currently selected commit date in
+			 `YYYY-MM-DD HH:MM:SS +ZZZZ` format.
 |%(blob)		|The currently selected blob ID.
 |%(branch)		|The currently selected branch name.
 |%(remote)		|The currently selected remote name. For remote

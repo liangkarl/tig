@@ -64,8 +64,10 @@ struct argv_env {
 	ARGV_ENV_INFO(ARGV_ENV_FIELDS)
 	argv_string author;
 	argv_string author_email;
+	argv_string author_date;
 	argv_string committer;
 	argv_string committer_email;
+	argv_string commit_date;
 	unsigned long goto_lineno;
 	unsigned long blame_lineno;
 	char goto_id[SIZEOF_REV];
@@ -76,7 +78,10 @@ struct argv_env {
 extern struct argv_env argv_env;
 
 struct ident;
-void argv_env_set_authors(struct argv_env *argv_env, const struct ident *author, const struct ident *committer);
+struct time;
+void argv_env_set_authors(struct argv_env *argv_env,
+			  const struct ident *author, const struct time *author_time,
+			  const struct ident *committer, const struct time *commit_time);
 
 enum argv_flag {
 	argv_flag_first = 1 << 0,
