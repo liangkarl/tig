@@ -82,6 +82,7 @@ struct time;
 void argv_env_set_authors(struct argv_env *argv_env,
 			  const struct ident *author, const struct time *author_time,
 			  const struct ident *committer, const struct time *commit_time);
+bool argv_env_set_commit(struct argv_env *argv_env, const char *commit_id);
 
 enum argv_flag {
 	argv_flag_first = 1 << 0,
