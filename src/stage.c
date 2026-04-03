@@ -336,58 +336,12 @@ stage_update_file_no_chunk(struct line *diff_hdr, struct line *end)
 	return ok;
 }
 
-static void
-stage_refresh_after_update(struct view *view)
-{
-	enum line_type target_type = 0;
-
-	switch (stage_line_type) {
-	case LINE_STAT_STAGED:
-		/*
-		 * If the staged file is actually a newly added file, unstage should
-		 * move it back to the untracked section, not unstaged.
-		 */
-		target_type = (stage_status.status == 'A')
-			    ? LINE_STAT_UNTRACKED
-			    : LINE_STAT_UNSTAGED;
-		break;
-
-	case LINE_STAT_UNSTAGED:
-	case LINE_STAT_UNTRACKED:
-		target_type = LINE_STAT_STAGED;
-		break;
-
-	default:
-		break;
-	}
-
-	refresh_view(view);
-
-	if (view->parent == &status_view) {
-		refresh_view(view->parent);
-		if (target_type && stage_status.status)
-			status_exists(view->parent, &stage_status, target_type);
-		return;
-	}
-
-	if (view->parent == &main_view) {
-		refresh_view(view->parent);
-
-		if (target_type)
-			main_status_exists(view->parent, target_type);
-
-		refresh_view(&status_view);
-		refresh_view(&stage_view);
-	}
-}
-
 static bool
-stage_update_current_file(struct view *view)
+stage_update_current_file(struct view *view, struct line *cur)
 {
-	struct line *cur = &view->line[view->pos.lineno];
 	struct line *hdr, *next_hdr, *chunk, *line, *end;
 
-	if (view->pos.lineno >= view->lines)
+	if (!cur || cur < view->line || cur >= view->line + view->lines)
 		return false;
 
 	if (cur->type == LINE_DIFF_HEADER)
@@ -481,8 +435,20 @@ stage_update(struct view *view, struct line *line, update_t update_type)
 		}
 
 	} else if (!stage_status.status) {
-		if (!stage_update_current_file(view)) {
-			report("Failed to update file");
+		bool updated;
+
+		/*
+		 * In stage view opened from main, pressing 'u' on staged changes
+		 * should unstage only the currently selected file.
+		 */
+		if (view->parent == &main_view &&
+		    stage_line_type == LINE_STAT_STAGED)
+			updated = stage_update_current_file(view, line);
+		else
+			updated = stage_update_files(view, stage_line_type);
+
+		if (!updated) {
+			report("Failed to update files");
 			return false;
 		}
 
@@ -492,8 +458,6 @@ stage_update(struct view *view, struct line *line, update_t update_type)
 	}
 
 	watch_apply(&view->watch, WATCH_INDEX);
-
-	stage_refresh_after_update(view);
 	return true;
 }
 
