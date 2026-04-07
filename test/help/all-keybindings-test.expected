@@ -104,6 +104,7 @@ External commands:
 [-] status bindings
 View-specific actions
                            u status-update       Stage/unstage chunk or file changes
+                           U status-update-all   Stage/unstage all file changes
                            ! status-revert       Revert chunk or file changes
                            M status-merge        Merge file using external tool
 External commands:
@@ -111,6 +112,7 @@ External commands:
 [-] stage bindings
 View-specific actions
                            u status-update       Stage/unstage chunk or file changes
+                           U status-update-all   Stage/unstage all file changes
                            ! status-revert       Revert chunk or file changes
                            1 stage-update-line   Stage/unstage single line
                            2 stage-update-part   Stage/unstage part of a chunk

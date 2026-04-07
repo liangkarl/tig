@@ -19,7 +19,7 @@ steps '
 	:0
 	:save-display main-with-unstaged-and-staged-split.screen
 
-	:status-update
+	:status-update-all
 	:save-display main-with-staged.screen
 
 	:enter

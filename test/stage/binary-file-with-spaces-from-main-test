@@ -1,0 +1,26 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+steps '
+	:view-main
+	:1
+	:view-stage
+	:status-update
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add tracked base
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir sh -c 'mkdir -p "bdfUtil/CTL" && printf "\\x01\\x02\\x03\\x04" > "bdfUtil/CTL/space name.bin"'
+in_work_dir git add "bdfUtil/CTL/space name.bin"
+
+test_tig status
+
+in_work_dir git status --short > git-status.out
+
+assert_equals 'git-status.out' <<EOF_STATUS
+?? bdfUtil/
+EOF_STATUS

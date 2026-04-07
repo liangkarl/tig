@@ -237,31 +237,329 @@ stage_apply_chunk(struct view *view, struct line *chunk, struct line *single,
 }
 
 static bool
+stage_parse_diff_git_paths(struct line *diff_hdr,
+			   char *old_path, size_t oldsz,
+			   char *new_path, size_t newsz)
+{
+	const char *text = box_text(diff_hdr);
+	const char *prefix = "diff --git a/";
+	size_t prefixlen = strlen(prefix);
+	const char *a, *a_end, *b;
+
+	if (strncmp(text, prefix, prefixlen) != 0)
+		return false;
+
+	a = text + prefixlen;
+	a_end = strstr(a, " b/");
+	if (!a_end)
+		return false;
+
+	b = a_end + 3;
+
+	string_ncopy_do(old_path, oldsz, a, (size_t)(a_end - a));
+	string_ncopy_do(new_path, newsz, b, strlen(b));
+	return true;
+}
+
+static bool
+stage_collect_no_chunk_paths(struct line *diff_hdr, struct line *end,
+			     char *old_path, size_t oldsz,
+			     char *new_path, size_t newsz)
+{
+	struct line *line;
+
+	if (!stage_parse_diff_git_paths(diff_hdr, old_path, oldsz, new_path, newsz))
+		return false;
+
+	for (line = diff_hdr + 1; line < end; line++) {
+		const char *text = box_text(line);
+
+		if (!strncmp(text, "rename from ", 12))
+			string_ncopy_do(old_path, oldsz, text + 12, strlen(text + 12));
+		else if (!strncmp(text, "rename to ", 10))
+			string_ncopy_do(new_path, newsz, text + 10, strlen(text + 10));
+	}
+
+	return true;
+}
+
+static bool
+stage_update_file_no_chunk(struct line *diff_hdr, struct line *end)
+{
+	char old_path[SIZEOF_STR] = "";
+	char new_path[SIZEOF_STR] = "";
+	bool ok;
+
+	if (!stage_collect_no_chunk_paths(diff_hdr, end,
+					  old_path, sizeof(old_path),
+					  new_path, sizeof(new_path))) {
+		report("No-chunk update: failed to parse diff paths");
+		return false;
+	}
+
+	switch (stage_line_type) {
+	case LINE_STAT_STAGED:
+		if (is_initial_commit()) {
+			if (old_path[0] && new_path[0] && strcmp(old_path, new_path)) {
+				const char *argv[] = {
+					"git", "rm", "-q", "--cached", "--",
+					old_path, new_path, NULL
+				};
+				ok = io_run_fg(argv, repo.exec_dir, -1);
+			} else {
+				const char *argv[] = {
+					"git", "rm", "-q", "--cached", "--",
+					new_path[0] ? new_path : old_path, NULL
+				};
+				ok = io_run_fg(argv, repo.exec_dir, -1);
+			}
+		} else {
+			if (old_path[0] && new_path[0] && strcmp(old_path, new_path)) {
+				const char *argv[] = {
+					"git", "reset", "-q", "HEAD", "--",
+					old_path, new_path, NULL
+				};
+				ok = io_run_fg(argv, repo.exec_dir, -1);
+			} else {
+				const char *argv[] = {
+					"git", "reset", "-q", "HEAD", "--",
+					new_path[0] ? new_path : old_path, NULL
+				};
+				ok = io_run_fg(argv, repo.exec_dir, -1);
+			}
+		}
+		break;
+
+	case LINE_STAT_UNSTAGED:
+	case LINE_STAT_UNTRACKED:
+		if (old_path[0] && new_path[0] && strcmp(old_path, new_path)) {
+			const char *argv[] = {
+				"git", "add", "--",
+				old_path, new_path, NULL
+			};
+			ok = io_run_fg(argv, repo.exec_dir, -1);
+		} else {
+			const char *argv[] = {
+				"git", "add", "--",
+				new_path[0] ? new_path : old_path, NULL
+			};
+			ok = io_run_fg(argv, repo.exec_dir, -1);
+		}
+		break;
+
+	default:
+		return false;
+	}
+
+	if (!ok) {
+		report("No-chunk update failed: old='%s' new='%s' line_type=%d initial=%d",
+		       old_path, new_path, stage_line_type, is_initial_commit());
+		return false;
+	}
+
+	report_debug("stage", "no-chunk update ok: old='%s' new='%s' line_type=%d initial=%d",
+		     old_path, new_path, stage_line_type, is_initial_commit());
+	return true;
+}
+
+static bool
+stage_update_path_no_chunk(const char *old_path, const char *new_path)
+{
+	bool ok;
+	const char *path = new_path[0] ? new_path : old_path;
+
+	switch (stage_line_type) {
+	case LINE_STAT_STAGED:
+		if (is_initial_commit()) {
+			const char *argv[] = {
+				"git", "rm", "-q", "--cached", "--",
+				path, NULL
+			};
+			ok = io_run_fg(argv, repo.exec_dir, -1);
+		} else {
+			const char *argv[] = {
+				"git", "reset", "-q", "HEAD", "--",
+				path, NULL
+			};
+			ok = io_run_fg(argv, repo.exec_dir, -1);
+		}
+		break;
+
+	case LINE_STAT_UNSTAGED:
+	case LINE_STAT_UNTRACKED: {
+		const char *argv[] = {
+			"git", "add", "--",
+			path, NULL
+		};
+		ok = io_run_fg(argv, repo.exec_dir, -1);
+		break;
+	}
+
+	default:
+		return false;
+	}
+
+	if (!ok)
+		report("No-chunk path update failed: old='%s' new='%s' line_type=%d",
+		       old_path, new_path, stage_line_type);
+	else
+		report_debug("stage", "no-chunk path update ok: path='%s' old='%s' new='%s' type=%d",
+			     path, old_path, new_path, stage_line_type);
+	return ok;
+}
+
+static bool
+stage_parse_diffstat_path(struct line *line, char *path, size_t pathsz)
+{
+	const char *text = box_text(line);
+	const char *bar = strstr(text, " |");
+	const char *start = text;
+	const char *end = bar;
+
+	if (line->type != LINE_DIFF_STAT || !bar)
+		return false;
+
+	while (*start && isspace((unsigned char)*start))
+		start++;
+
+	while (end > start && isspace((unsigned char)end[-1]))
+		end--;
+	if (end <= start)
+		return false;
+
+	string_ncopy_do(path, pathsz, start, (size_t)(end - start));
+	return path[0];
+}
+
+static bool
+stage_collect_current_diffstat_path(struct view *view, struct line *cur, char *path, size_t pathsz)
+{
+	struct line *line;
+
+	if (stage_parse_diffstat_path(cur, path, pathsz))
+		return true;
+
+	for (line = cur; line >= view->line; line--) {
+		if (stage_parse_diffstat_path(line, path, pathsz))
+			return true;
+		if (line->type == LINE_DIFF_HEADER)
+			break;
+	}
+
+	for (line = cur + 1; line < view->line + view->lines; line++) {
+		if (stage_parse_diffstat_path(line, path, pathsz))
+			return true;
+		if (line->type == LINE_DIFF_HEADER)
+			break;
+	}
+
+	return false;
+}
+
+static bool
+stage_update_current_file(struct view *view, struct line *cur)
+{
+	struct line *hdr, *next_hdr, *chunk, *line, *end;
+	char path[SIZEOF_STR] = "";
+
+	if (!cur || cur < view->line || cur >= view->line + view->lines)
+		return false;
+
+	if (stage_parse_diffstat_path(cur, path, sizeof(path)))
+		return stage_update_path_no_chunk(path, path);
+
+	if (cur->type == LINE_DIFF_HEADER)
+		hdr = cur;
+	else
+		hdr = find_prev_line_by_type(view, cur, LINE_DIFF_HEADER);
+
+	if (!hdr) {
+		struct line *first_hdr = find_next_line_by_type(view, view->line, LINE_DIFF_HEADER);
+
+		if (first_hdr && cur < first_hdr &&
+		    stage_collect_current_diffstat_path(view, cur, path, sizeof(path)))
+			return stage_update_path_no_chunk(path, path);
+
+		hdr = first_hdr;
+	}
+
+	if (!hdr) {
+		if (!stage_collect_current_diffstat_path(view, cur, path, sizeof(path))) {
+			report("No-chunk update: cannot find diff header or diffstat path");
+			return false;
+		}
+
+		report_debug("stage", "fallback to diffstat path update: %s", path);
+		return stage_update_path_no_chunk(path, path);
+	}
+
+	next_hdr = find_next_line_by_type(view, hdr + 1, LINE_DIFF_HEADER);
+	end = next_hdr ? next_hdr : view->line + view->lines;
+	chunk = find_next_line_by_type(view, hdr + 1, LINE_DIFF_CHUNK);
+
+	if (!chunk || chunk >= end)
+		return stage_update_file_no_chunk(hdr, end);
+
+	for (line = chunk; line && line < end;
+	     line = find_next_line_by_type(view, line + 1, LINE_DIFF_CHUNK)) {
+		if (!stage_apply_chunk(view, line, NULL, false, UPDATE_NORMAL))
+			return false;
+	}
+
+	return true;
+}
+
+static bool
 stage_update_files(struct view *view, enum line_type type)
 {
 	struct line *line;
 
-	if (view->parent != &status_view) {
-		bool updated = false;
+	if (view->parent == &status_view) {
+		view = view->parent;
+		line = find_next_line_by_type(view, view->line, type);
+		return line && status_update_files(view, line + 1);
+	}
 
-		for (line = view->line; (line = find_next_line_by_type(view, line, LINE_DIFF_CHUNK)); line++) {
-			if (!stage_apply_chunk(view, line, NULL, false, UPDATE_NORMAL)) {
-				report("Failed to apply chunk");
+	bool updated = false;
+	struct line *hdr = view->line;
+
+	while ((hdr = find_next_line_by_type(view, hdr, LINE_DIFF_HEADER))) {
+		struct line *next_hdr;
+		struct line *chunk;
+		struct line *end;
+
+		next_hdr = find_next_line_by_type(view, hdr + 1, LINE_DIFF_HEADER);
+		end = next_hdr ? next_hdr : view->line + view->lines;
+		chunk = find_next_line_by_type(view, hdr + 1, LINE_DIFF_CHUNK);
+
+		if (!chunk || chunk >= end) {
+			if (!stage_update_file_no_chunk(hdr, end)) {
+				report("Failed to update file");
 				return false;
 			}
 			updated = true;
+		} else {
+			for (line = chunk; line && line < end;
+			line = find_next_line_by_type(view, line + 1, LINE_DIFF_CHUNK)) {
+				if (!stage_apply_chunk(view, line, NULL, false, UPDATE_NORMAL)) {
+					report("Failed to apply chunk");
+					return false;
+				}
+				updated = true;
+			}
 		}
 
-		return updated;
+		if (!next_hdr)
+			break;
+
+		hdr = next_hdr;
 	}
 
-	view = view->parent;
-	line = find_next_line_by_type(view, view->line, type);
-	return line && status_update_files(view, line + 1);
+	return updated;
 }
 
 static bool
-stage_update(struct view *view, struct line *line, update_t update_type)
+stage_update(struct view *view, struct line *line, update_t update_type, bool update_all_files)
 {
 	struct line *chunk = NULL;
 
@@ -275,7 +573,24 @@ stage_update(struct view *view, struct line *line, update_t update_type)
 		}
 
 	} else if (!stage_status.status) {
-		if (!stage_update_files(view, stage_line_type)) {
+		bool updated;
+
+		if (update_all_files) {
+			report_debug("stage", "update all files: parent=%s line_type=%d",
+				     view->parent ? view->parent->name : "NULL", stage_line_type);
+			updated = stage_update_files(view, stage_line_type);
+		} else {
+			report_debug("stage", "update current file: line=%ld file='%s'",
+				     line ? (long)(line - view->line) : -1L, view->env->file);
+			if (view->env->file[0] &&
+			    line->type != LINE_DIFF_HEADER &&
+			    line->type != LINE_DIFF_STAT)
+				updated = stage_update_path_no_chunk(view->env->file, view->env->file);
+			else
+				updated = stage_update_current_file(view, line);
+		}
+
+		if (!updated) {
 			report("Failed to update files");
 			return false;
 		}
@@ -286,7 +601,6 @@ stage_update(struct view *view, struct line *line, update_t update_type)
 	}
 
 	watch_apply(&view->watch, WATCH_INDEX);
-
 	return true;
 }
 
@@ -561,7 +875,12 @@ stage_request(struct view *view, enum request request, struct line *line)
 {
 	switch (request) {
 	case REQ_STATUS_UPDATE:
-		if (!stage_update(view, line, UPDATE_NORMAL))
+		if (!stage_update(view, line, UPDATE_NORMAL, false))
+			return REQ_NONE;
+		break;
+
+	case REQ_STATUS_UPDATE_ALL:
+		if (!stage_update(view, line, UPDATE_NORMAL, true))
 			return REQ_NONE;
 		break;
 
@@ -584,7 +903,7 @@ stage_request(struct view *view, enum request request, struct line *line)
 			report("Staging is not supported for wrapped lines");
 			return REQ_NONE;
 		}
-		if (!stage_update(view, line, UPDATE_SINGLE_LINE))
+		if (!stage_update(view, line, UPDATE_SINGLE_LINE, false))
 			return REQ_NONE;
 		break;
 
@@ -603,7 +922,7 @@ stage_request(struct view *view, enum request request, struct line *line)
 			report("Staging is not supported for wrapped lines");
 			return REQ_NONE;
 		}
-		if (!stage_update(view, line, UPDATE_PART))
+		if (!stage_update(view, line, UPDATE_PART, false))
 			return REQ_NONE;
 		break;
 
@@ -701,8 +1020,48 @@ stage_select(struct view *view, struct line *line)
 	const char *changes_msg = stage_line_type == LINE_STAT_STAGED ? "Staged changes"
 				: stage_line_type == LINE_STAT_UNSTAGED ? "Unstaged changes"
 				: NULL;
+	struct line *hdr = NULL;
+	char old_path[SIZEOF_STR] = "";
+	char new_path[SIZEOF_STR] = "";
+	char path[SIZEOF_STR] = "";
 
 	diff_common_select(view, line, changes_msg);
+	view->env->file[0] = 0;
+	view->env->file_old[0] = 0;
+
+	if (stage_parse_diffstat_path(line, path, sizeof(path))) {
+		string_copy(view->env->file, path);
+		report_debug("stage", "select diffstat line=%ld file='%s'",
+			     (long) (line - view->line), view->env->file);
+		return;
+	}
+
+	if (line->type == LINE_DIFF_HEADER)
+		hdr = line;
+	else
+		hdr = find_prev_line_by_type(view, line, LINE_DIFF_HEADER);
+
+	if (!hdr)
+		hdr = find_next_line_by_type(view, line, LINE_DIFF_HEADER);
+
+	if (hdr &&
+	    stage_parse_diff_git_paths(hdr, old_path, sizeof(old_path), new_path, sizeof(new_path))) {
+		string_copy(view->env->file, new_path[0] ? new_path : old_path);
+		if (old_path[0] && new_path[0] && strcmp(old_path, new_path))
+			string_copy(view->env->file_old, old_path);
+		report_debug("stage", "select header line=%ld file='%s' old='%s'",
+			     (long) (line - view->line), view->env->file, view->env->file_old);
+		return;
+	}
+
+	if (stage_collect_current_diffstat_path(view, line, path, sizeof(path))) {
+		string_copy(view->env->file, path);
+		report_debug("stage", "select fallback diffstat line=%ld file='%s'",
+			     (long) (line - view->line), view->env->file);
+	} else {
+		report_debug("stage", "select unresolved line=%ld type=%d",
+			     (long) (line - view->line), line->type);
+	}
 }
 
 static enum status_code

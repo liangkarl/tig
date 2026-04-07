@@ -1,0 +1,29 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+steps '
+	:view-main
+	:1
+	:view-stage
+	:2
+	:status-update
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add tracked base
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir touch aa aab aabc
+in_work_dir git add aa aab aabc
+
+test_tig status
+
+in_work_dir git status --short > git-status.out
+
+assert_equals 'git-status.out' <<EOF_STATUS
+A  aa
+A  aabc
+?? aab
+EOF_STATUS
