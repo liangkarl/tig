@@ -1,0 +1,33 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+steps '
+	:view-main
+	:1
+	:view-stage
+	:/touch file
+	:exec !assert-var "%(file)" == "touch file"
+	:/touch_file
+	:exec !assert-var "%(file)" == "touch_file"
+	:status-update
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add tracked base
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir touch touch_file "touch file"
+in_work_dir git add touch_file "touch file"
+
+test_tig status
+
+assert_vars 2
+
+in_work_dir git status --short -z | tr '\0' '\n' > git-status.out
+
+assert_equals 'git-status.out' <<EOF_STATUS
+A  touch file
+?? touch_file
+EOF_STATUS
