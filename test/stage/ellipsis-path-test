@@ -1,0 +1,31 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+path=...aaaaaaaaaaa
+
+steps '
+	:view-main
+	:1
+	:view-stage
+	:1
+	:exec !assert-var "%(file)" == "'$path'"
+	:status-update
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add "$path" initial
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir git_add "$path" changed
+
+test_tig status
+
+assert_vars 1
+
+in_work_dir git status --short > git-status.out
+
+assert_equals git-status.out <<EOF_STATUS
+ M ...aaaaaaaaaaa
+EOF_STATUS

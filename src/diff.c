@@ -730,6 +730,13 @@ diff_get_pathname(struct view *view, struct line *line, bool old)
 	struct line *header;
 	struct line *file;
 
+	if (line->type == LINE_DIFF_STAT) {
+		header = diff_find_header_from_stat(view, line);
+		if (!header)
+			return NULL;
+		line = header;
+	}
+
 	header = find_prev_line_in_commit_by_type(view, line, LINE_DIFF_HEADER);
 	if (!header)
 		return NULL;
@@ -772,7 +779,15 @@ diff_get_pathname(struct view *view, struct line *line, bool old)
 		return name;
 	}
 
-	return NULL;
+	/* Empty files have no ---/+++ lines.  The new path can still be
+	 * recovered from an ordinary diff --git header. */
+	{
+		const char *text = box_text(header);
+		const char *new_path = !old && !prefixcmp(text, "diff --git a/")
+			? strstr(text + STRING_SIZE("diff --git a/"), " b/") : NULL;
+
+		return new_path ? new_path + STRING_SIZE(" b/") : NULL;
+	}
 }
 
 enum request
@@ -835,48 +850,70 @@ diff_request(struct view *view, enum request request, struct line *line)
 void
 diff_common_select(struct view *view, struct line *line, const char *changes_msg)
 {
+	bool has_path = diff_select_path(view, line);
+
 	if (line->type == LINE_DIFF_STAT) {
-		struct line *header = diff_find_header_from_stat(view, line);
-		if (header) {
-			const char *file = diff_get_pathname(view, header, false);
-
-			if (file) {
-				const char *old_file = diff_get_pathname(view, header, true);
-				if (old_file)
-					string_format(view->env->file_old, "%s", old_file);
-				else
-					view->env->file_old[0] = '\0';
-				string_format(view->env->file, "%s", file);
-				view->env->lineno = view->env->goto_lineno = 0;
-				view->env->blob[0] = 0;
-			}
-		}
-
 		string_format(view->ref, "Press '%s' to jump to file diff",
 			      get_view_key(view, REQ_ENTER));
 	} else {
-		const char *file = diff_get_pathname(view, line, false);
-
-		if (file) {
-			const char *old_file = diff_get_pathname(view, line, true);
-			if (old_file)
-				string_format(view->env->file_old, "%s", old_file);
-			else
-				view->env->file_old[0] = '\0';
+		if (has_path) {
 			if (changes_msg)
-				string_format(view->ref, "%s to '%s'", changes_msg, file);
-			string_format(view->env->file, "%s", file);
-			view->env->lineno = view->env->goto_lineno = diff_get_lineno(view, line, false);
-			if (view->env->goto_lineno > 0)
-				view->env->goto_lineno--;
-			view->env->lineno_old = diff_get_lineno(view, line, true);
-			view->env->blob[0] = 0;
+				string_format(view->ref, "%s to '%s'", changes_msg, view->env->file);
 		} else {
 			view->env->lineno = view->env->goto_lineno = (line - view->line) + 1;
 			string_ncopy(view->ref, view->ops->id, strlen(view->ops->id));
 		}
 	}
 	pager_select(view, line);
+}
+
+bool
+diff_select_path(struct view *view, struct line *line)
+{
+	const char *file = diff_get_pathname(view, line, false);
+	const char *old_file;
+	char stat_path[SIZEOF_STR];
+
+	if (!file && line->type == LINE_DIFF_STAT) {
+		const char *text = box_text(line);
+		const char *end = strstr(text, " |");
+		const char *start = text;
+
+		while (*start && isspace((unsigned char) *start))
+			start++;
+		while (end && end > start && isspace((unsigned char) end[-1]))
+			end--;
+		if (end && end > start) {
+			string_ncopy_do(stat_path, sizeof(stat_path), start, (size_t) (end - start));
+			file = stat_path;
+		}
+	}
+	if (!file) {
+		/* Keep the path inherited from the parent view while the log-like
+		 * view is loading.  It is needed to restore the initial position in
+		 * the selected file. */
+		if (!view->pipe) {
+			view->env->file[0] = '\0';
+			view->env->file_old[0] = '\0';
+			view->env->lineno = view->env->goto_lineno = view->env->lineno_old = 0;
+		}
+		return false;
+	}
+
+	view->env->file_old[0] = '\0';
+	view->env->lineno = view->env->goto_lineno = view->env->lineno_old = 0;
+	old_file = diff_get_pathname(view, line, true);
+	if (old_file)
+		string_format(view->env->file_old, "%s", old_file);
+	string_format(view->env->file, "%s", file);
+	if (line->type != LINE_DIFF_STAT) {
+		view->env->lineno = view->env->goto_lineno = diff_get_lineno(view, line, false);
+		if (view->env->goto_lineno > 0)
+			view->env->goto_lineno--;
+		view->env->lineno_old = diff_get_lineno(view, line, true);
+	}
+	view->env->blob[0] = '\0';
+	return true;
 }
 
 static void
