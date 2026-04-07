@@ -1,0 +1,29 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+steps '
+	:view-main
+	:1
+	:view-stage
+	:1
+	:exec !assert-var "%(file)" == "a.bin"
+	:2
+	:exec !assert-var "%(file)" == "dir/space name.bin"
+	:1
+	:/a.bin differ
+	:exec !assert-var "%(file)" == "a.bin"
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add tracked base
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir sh -c 'printf "\\x01\\x02" > a.bin'
+in_work_dir sh -c 'mkdir -p dir && printf "\\x03\\x04" > "dir/space name.bin"'
+in_work_dir git add a.bin "dir/space name.bin"
+
+test_tig status
+
+assert_vars 3

@@ -923,6 +923,7 @@ View-specific actions
 [frame="none",grid="none",cols="25<m,75<"]
 |=============================================================================
 |status-update           |Stage/unstage chunk or file changes
+|status-update-all       |Stage/unstage all file changes
 |status-revert           |Revert chunk or file changes
 |status-merge            |Merge file using external tool
 |stage-update-line       |Stage/unstage single line

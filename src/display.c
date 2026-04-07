@@ -552,6 +552,38 @@ report(const char *msg, ...)
 }
 
 void
+report_debug(const char *context, const char *msg, ...)
+{
+	static int enabled = -1;
+	char msg_buf[SIZEOF_STR];
+	char log_buf[SIZEOF_STR];
+	va_list args;
+	int ok;
+
+	if (enabled == -1) {
+		const char *value = getenv("TIG_DEBUG");
+		enabled = value && *value && strcmp(value, "0");
+	}
+
+	if (!enabled)
+		return;
+
+	va_start(args, msg);
+	ok = vsnprintf(msg_buf, sizeof(msg_buf), msg, args);
+	va_end(args);
+	if (ok < 0)
+		return;
+
+	if (context && *context)
+		string_format(log_buf, "%s: %s", context, msg_buf);
+	else
+		string_copy(log_buf, msg_buf);
+
+	report("%s", log_buf);
+	io_trace("debug: %s\n", log_buf);
+}
+
+void
 report_clear(void)
 {
 	struct view *view = display[current_view];
