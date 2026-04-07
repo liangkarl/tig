@@ -658,6 +658,35 @@ status_update(struct view *view)
 	return true;
 }
 
+static bool
+status_update_all(struct view *view)
+{
+	struct line *line = &view->line[view->pos.lineno];
+	struct line *section;
+
+	assert(view->lines);
+
+	if (line->type != LINE_STAT_STAGED &&
+	    line->type != LINE_STAT_UNSTAGED &&
+	    line->type != LINE_STAT_UNTRACKED) {
+		report("Nothing to update");
+		return false;
+	}
+
+	section = find_prev_line_by_type(view, line, line->type);
+	if (!section || section->data || status_has_none(view, section)) {
+		report("Nothing to update");
+		return false;
+	}
+
+	if (!status_update_files(view, section + 1)) {
+		report("Failed to update file status");
+		return false;
+	}
+
+	return true;
+}
+
 bool
 status_revert(struct status *status, enum line_type type, bool has_none)
 {
@@ -719,6 +748,11 @@ status_request(struct view *view, enum request request, struct line *line)
 	switch (request) {
 	case REQ_STATUS_UPDATE:
 		if (!status_update(view))
+			return REQ_NONE;
+		break;
+
+	case REQ_STATUS_UPDATE_ALL:
+		if (!status_update_all(view))
 			return REQ_NONE;
 		break;
 
