@@ -1,0 +1,32 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+long_path=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.txt
+
+steps '
+	:view-main
+	:1
+	:view-stage
+	:1
+	:exec !assert-var "%(file)" == "'$long_path'"
+	:status-update
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir mkdir -p "$(dirname "$long_path")"
+in_work_dir git_add "$long_path" initial
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir sh -c 'printf "changed\n" > "$1"' sh "$long_path"
+
+test_tig status
+
+assert_vars 1
+
+in_work_dir git status --short > git-status.out
+
+assert_equals git-status.out <<EOF_STATUS
+M  $long_path
+EOF_STATUS

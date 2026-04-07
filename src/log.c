@@ -65,6 +65,9 @@ log_select(struct view *view, struct line *line)
 		else
 			state->author_id[0] = 0;
 	}
+
+	diff_select_path(view, line);
+
 	string_ncopy(view->env->text, text, strlen(text));
 	state->last_lineno = line->lineno;
 	state->last_type = line->type;
