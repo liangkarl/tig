@@ -673,8 +673,11 @@ status_update_all(struct view *view)
 		return false;
 	}
 
-	section = find_prev_line_by_type(view, line, line->type);
-	if (!section || section->data || status_has_none(view, section)) {
+	section = line;
+	while (section > view->line && section[-1].type == line->type)
+		section--;
+
+	if (section->data || status_has_none(view, section)) {
 		report("Nothing to update");
 		return false;
 	}
