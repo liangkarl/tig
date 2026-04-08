@@ -41,12 +41,38 @@ log_copy_rev(struct view *view, struct line *line)
 	view->env->blob[0] = 0;
 }
 
+static bool
+log_parse_diffstat_path(struct line *line, char *path, size_t path_size)
+{
+	const char *text = box_text(line);
+	const char *bar = strstr(text, " |");
+	const char *start = text;
+	const char *end = bar;
+
+	if (line->type != LINE_DIFF_STAT || !bar)
+		return false;
+
+	while (*start && isspace((unsigned char) *start))
+		start++;
+
+	while (end > start && isspace((unsigned char) end[-1]))
+		end--;
+
+	if (end <= start)
+		return false;
+
+	string_ncopy_do(path, path_size, start, (size_t) (end - start));
+	return path[0];
+}
+
 static void
 log_select(struct view *view, struct line *line)
 {
 	struct log_state *state = view->private;
 	int last_lineno = state->last_lineno;
 	const char *text = box_text(line);
+	char diffstat_path[SIZEOF_STR] = { 0 };
+	const char *file;
 
 	if (!last_lineno || abs(last_lineno - line->lineno) > 1
 	    || (state->last_type == LINE_COMMIT && last_lineno > line->lineno)) {
@@ -65,6 +91,36 @@ log_select(struct view *view, struct line *line)
 		else
 			state->author_id[0] = 0;
 	}
+
+	view->env->file[0] = '\0';
+	view->env->file_old[0] = '\0';
+	view->env->lineno = view->env->goto_lineno = view->env->lineno_old = 0;
+
+	if (line->type == LINE_DIFF_STAT) {
+		if (log_parse_diffstat_path(line, diffstat_path, sizeof(diffstat_path)))
+			file = diffstat_path;
+		else
+			file = diff_get_pathname(view, line, false);
+	} else {
+		file = diff_get_pathname(view, line, false);
+	}
+	if (file) {
+		const char *old_file = line->type == LINE_DIFF_STAT ? NULL : diff_get_pathname(view, line, true);
+
+		if (old_file)
+			string_format(view->env->file_old, "%s", old_file);
+		string_format(view->env->file, "%s", file);
+
+		if (line->type != LINE_DIFF_STAT) {
+			view->env->lineno = view->env->goto_lineno = diff_get_lineno(view, line, false);
+			if (view->env->goto_lineno > 0)
+				view->env->goto_lineno--;
+			view->env->lineno_old = diff_get_lineno(view, line, true);
+		}
+
+		view->env->blob[0] = '\0';
+	}
+
 	string_ncopy(view->env->text, text, strlen(text));
 	state->last_lineno = line->lineno;
 	state->last_type = line->type;
