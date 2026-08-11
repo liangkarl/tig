@@ -145,6 +145,24 @@ update_index(void)
 	return io_run_bg(update_index_argv, repo.exec_dir);
 }
 
+static bool
+index_status_is_unmerged(const char *status)
+{
+	/*
+	 * Porcelain v1 uses the XY status field to report unmerged paths as
+	 * DD, AU, UD, UA, DU, AA, or UU.  These entries can make the index look
+	 * staged even when the staged diff has no renderable content, so keep
+	 * them out of the staged count used by the main view.
+	 */
+	return (status[0] == 'D' && status[1] == 'D') ||
+	       (status[0] == 'A' && status[1] == 'U') ||
+	       (status[0] == 'U' && status[1] == 'D') ||
+	       (status[0] == 'U' && status[1] == 'A') ||
+	       (status[0] == 'D' && status[1] == 'U') ||
+	       (status[0] == 'A' && status[1] == 'A') ||
+	       (status[0] == 'U' && status[1] == 'U');
+}
+
 bool
 index_diff(struct index_diff *diff, bool untracked, bool count_all)
 {
@@ -167,7 +185,7 @@ index_diff(struct index_diff *diff, bool untracked, bool count_all)
 		if (buf.data[0] == '?')
 			diff->untracked++;
 		/* Ignore staged but unmerged entries. */
-		else if (buf.data[0] != ' ' && buf.data[0] != 'U' && buf.data[1] != 'U')
+		else if (buf.data[0] != ' ' && !index_status_is_unmerged(buf.data))
 			diff->staged++;
 		if (buf.data[1] != ' ' && buf.data[1] != '?')
 			diff->unstaged++;
