@@ -728,10 +728,18 @@ const char *
 diff_get_pathname(struct view *view, struct line *line, bool old)
 {
 	struct line *header;
+	struct line *file_header;
 	const char *dst;
 	const char *prefixes[] = { "diff --cc ", "diff --combined " };
 	const char *name;
 	int i;
+
+	if (line->type == LINE_DIFF_STAT) {
+		header = diff_find_header_from_stat(view, line);
+		if (!header)
+			return NULL;
+		line = header;
+	}
 
 	header = find_prev_line_in_commit_by_type(view, line, LINE_DIFF_HEADER);
 	if (!header)
@@ -745,9 +753,17 @@ diff_get_pathname(struct view *view, struct line *line, bool old)
 		}
 	}
 
-	header = find_next_line_by_type(view, header, old ? LINE_DIFF_DEL_FILE : LINE_DIFF_ADD_FILE);
-	if (!header)
-		return NULL;
+	file_header = find_next_line_by_type(view, header, old ? LINE_DIFF_DEL_FILE : LINE_DIFF_ADD_FILE);
+	if (!file_header || header != find_prev_line_by_type(view, file_header, LINE_DIFF_HEADER)) {
+		/* Empty files have no ---/+++ lines.  The new path can still be
+		 * recovered from an ordinary diff --git header. */
+		const char *text = box_text(header);
+		const char *new_path = !old && !prefixcmp(text, "diff --git a/")
+			? strstr(text + STRING_SIZE("diff --git a/"), " b/") : NULL;
+
+		return new_path ? new_path + STRING_SIZE(" b/") : NULL;
+	}
+	header = file_header;
 
 	name = box_text(header);
 	if (old ? !prefixcmp(name, "--- ") : !prefixcmp(name, "+++ "))

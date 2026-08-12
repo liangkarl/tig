@@ -409,12 +409,13 @@ stage_update_path_no_chunk(const char *old_path, const char *new_path)
 }
 
 static bool
-stage_parse_diffstat_path(struct line *line, char *path, size_t pathsz)
+stage_parse_diffstat_path(struct view *view, struct line *line, char *path, size_t pathsz)
 {
 	const char *text = box_text(line);
 	const char *bar = strstr(text, " |");
 	const char *start = text;
 	const char *end = bar;
+	const char *full_path;
 
 	if (line->type != LINE_DIFF_STAT || !bar)
 		return false;
@@ -428,7 +429,15 @@ stage_parse_diffstat_path(struct line *line, char *path, size_t pathsz)
 		return false;
 
 	string_ncopy_do(path, pathsz, start, (size_t)(end - start));
-	return path[0];
+
+	/* Git can replace any part of an overlong diffstat name with "...".
+	 * Only consult the header when an ellipsis is present: an actual path
+	 * beginning with dots is retained when it already matches the header. */
+	if (strstr(path, "...") &&
+	    (full_path = diff_get_pathname(view, line, false)) &&
+	    strcmp(path, full_path))
+		string_ncopy_do(path, pathsz, full_path, strlen(full_path));
+	return true;
 }
 
 static bool
@@ -436,18 +445,18 @@ stage_collect_current_diffstat_path(struct view *view, struct line *cur, char *p
 {
 	struct line *line;
 
-	if (stage_parse_diffstat_path(cur, path, pathsz))
+	if (stage_parse_diffstat_path(view, cur, path, pathsz))
 		return true;
 
 	for (line = cur; line >= view->line; line--) {
-		if (stage_parse_diffstat_path(line, path, pathsz))
+		if (stage_parse_diffstat_path(view, line, path, pathsz))
 			return true;
 		if (line->type == LINE_DIFF_HEADER)
 			break;
 	}
 
 	for (line = cur + 1; line < view->line + view->lines; line++) {
-		if (stage_parse_diffstat_path(line, path, pathsz))
+		if (stage_parse_diffstat_path(view, line, path, pathsz))
 			return true;
 		if (line->type == LINE_DIFF_HEADER)
 			break;
@@ -1038,7 +1047,7 @@ stage_select(struct view *view, struct line *line)
 		return;
 	}
 
-	if (stage_parse_diffstat_path(line, path, sizeof(path))) {
+	if (stage_parse_diffstat_path(view, line, path, sizeof(path))) {
 		string_copy(view->env->file, path);
 		report_debug("stage", "select diffstat line=%ld file='%s'",
 			     (long) (line - view->line), view->env->file);
