@@ -874,9 +874,6 @@ diff_select_path(struct view *view, struct line *line)
 	const char *old_file;
 	char stat_path[SIZEOF_STR];
 
-	view->env->file[0] = '\0';
-	view->env->file_old[0] = '\0';
-	view->env->lineno = view->env->goto_lineno = view->env->lineno_old = 0;
 	if (!file && line->type == LINE_DIFF_STAT) {
 		const char *text = box_text(line);
 		const char *end = strstr(text, " |");
@@ -891,9 +888,20 @@ diff_select_path(struct view *view, struct line *line)
 			file = stat_path;
 		}
 	}
-	if (!file)
+	if (!file) {
+		/* Keep the path inherited from the parent view while the log-like
+		 * view is loading.  It is needed to restore the initial position in
+		 * the selected file. */
+		if (!view->pipe) {
+			view->env->file[0] = '\0';
+			view->env->file_old[0] = '\0';
+			view->env->lineno = view->env->goto_lineno = view->env->lineno_old = 0;
+		}
 		return false;
+	}
 
+	view->env->file_old[0] = '\0';
+	view->env->lineno = view->env->goto_lineno = view->env->lineno_old = 0;
 	old_file = diff_get_pathname(view, line, true);
 	if (old_file)
 		string_format(view->env->file_old, "%s", old_file);
