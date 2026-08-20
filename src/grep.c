@@ -84,16 +84,16 @@ grep_select(struct view *view, struct line *line)
 		return;
 	sep = strchr(grep->file, ':');
 	if (sep) {
-		string_ncopy(view->env->ref, grep->file, sep - grep->file);
-		string_ncopy(view->env->file, sep + 1, strlen(sep + 1));
+		char ref[SIZEOF_STR];
+
+		string_ncopy_do(ref, sizeof(ref), grep->file, sep - grep->file);
+		argv_env_set_ref(view->env, ref);
+		argv_env_set_file_info(view->env, sep + 1, NULL, grep->lineno + 1, 0, text);
 	} else {
-		view->env->ref[0] = 0;
-		string_ncopy(view->env->file, grep->file, strlen(grep->file));
+		argv_env_set_ref(view->env, NULL);
+		argv_env_set_file_info(view->env, grep->file, NULL, grep->lineno + 1, 0, text);
 	}
 	string_ncopy(view->ref, grep->file, strlen(grep->file));
-	view->env->lineno = grep->lineno + 1;
-	string_ncopy(view->env->text, text, strlen(text));
-	view->env->blob[0] = 0;
 }
 
 static const char *grep_args[] = {

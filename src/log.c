@@ -29,6 +29,7 @@ struct log_state {
 	bool after_commit_header;
 	bool reading_diff_stat;
 	char author_id[SIZEOF_REV];
+	struct argv_env commit_env;
 };
 
 static inline void
@@ -38,7 +39,6 @@ log_copy_rev(struct view *view, struct line *line)
 	size_t offset = get_graph_indent(text);
 
 	string_copy_rev_from_commit_line(view->ref, text + offset);
-	view->env->blob[0] = 0;
 }
 
 static void
@@ -60,11 +60,12 @@ log_select(struct view *view, struct line *line)
 		log_copy_rev(view, line);
 	string_copy_rev(view->env->commit, view->ref);
 	if (strcmp(state->author_id, view->ref)) {
-		if (argv_env_set_commit(view->env, view->ref))
+		if (argv_env_load_commit_info(&state->commit_env, view->ref))
 			string_copy_rev(state->author_id, view->ref);
 		else
 			state->author_id[0] = 0;
 	}
+	argv_env_copy_commit_info(view->env, &state->commit_env);
 
 	diff_select_path(view, line);
 

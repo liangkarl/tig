@@ -1,0 +1,31 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+steps '
+	:2
+	:exec !assert-var [%(author)] == [A. U. Thor]
+	:1
+	:exec !assert-var [%(author)] == []
+	:exec !assert-var [%(author-email)] == []
+	:exec !assert-var [%(author-date)] == []
+	:exec !assert-var [%(committer)] == []
+	:exec !assert-var [%(committer-email)] == []
+	:exec !assert-var [%(commit-date)] == []
+	:enter
+	:/diff --git a/a b/a
+	:exec !assert-var [%(file)] == [a]
+	:view-close
+	:exec !assert-var [%(file)] == []
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add a initial
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir git_add a changed
+
+test_tig
+
+assert_vars 9

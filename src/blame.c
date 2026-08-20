@@ -107,7 +107,7 @@ blame_open(struct view *view, enum open_flags flags)
 				if (arg[0] == '-' || arg[0] == '^')
 					argv_append(&opt_blame_options, arg);
 				else if (!view->env->ref[0])
-					string_ncopy(view->env->ref, arg, strlen(arg));
+					argv_env_set_ref(view->env, arg);
 				else
 					usage("Invalid number of options to blame");
 			}
@@ -372,7 +372,7 @@ blame_go_forward(struct view *view, struct blame *blame, bool parent)
 		return;
 	}
 
-	string_ncopy(view->env->ref, id, sizeof(commit->id));
+	argv_env_set_ref(view->env, id);
 	string_ncopy(view->env->file, filename, strlen(filename));
 	if (parent) {
 		setup_blame_parent_line(view, blame);
@@ -393,7 +393,7 @@ blame_go_back(struct view *view)
 		return;
 	}
 
-	string_copy(view->env->ref, history_state.id);
+	argv_env_set_ref(view->env, history_state.id);
 	string_ncopy(view->env->file, history_state.filename, strlen(history_state.filename));
 	view->env->goto_lineno = view->pos.lineno;
 	reload_view(view);
@@ -488,33 +488,30 @@ blame_request(struct view *view, enum request request, struct line *line)
 static void
 blame_select(struct view *view, struct line *line)
 {
+	struct blame_state *state = view->private;
 	struct blame *blame = line->data;
 	struct blame_commit *commit = blame->commit;
 	const char *text = blame->text;
 
 	if (!commit) {
-		argv_env_set_authors(view->env, NULL, NULL, NULL, NULL);
+		argv_env_set_commit_info(view->env, NULL, NULL, NULL, NULL, NULL);
 		return;
 	}
 
 	if (string_rev_is_null(commit->id)) {
-		view->env->commit[0] = 0;
+		argv_env_set_commit_info(view->env, NULL, commit->author, &commit->author_time,
+					 commit->committer, &commit->commit_time);
 		string_ncopy(view->ref, commit->filename, strlen(commit->filename));
 	} else {
-		string_copy_rev(view->env->commit, commit->id);
+		argv_env_set_commit_info(view->env, commit->id, commit->author, &commit->author_time,
+					 commit->committer, &commit->commit_time);
 		string_format(view->ref, "%s:%s", commit->id, commit->filename);
 	}
 
-	if (strcmp(commit->filename, view->env->file))
-		string_format(view->env->file_old, "%s", commit->filename);
-	else
-		view->env->file_old[0] = '\0';
-
-	view->env->lineno = view->pos.lineno + 1;
-	string_ncopy(view->env->text, text, strlen(text));
-	argv_env_set_authors(view->env, commit->author, &commit->author_time,
-			     commit->committer, &commit->commit_time);
-	view->env->blob[0] = 0;
+	argv_env_set_file_info(view->env, state->history_state.filename,
+			       strcmp(commit->filename, state->history_state.filename)
+			       ? commit->filename : NULL,
+			       view->pos.lineno + 1, 0, text);
 }
 
 static struct view_ops blame_ops = {
