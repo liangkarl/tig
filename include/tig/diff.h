@@ -25,10 +25,12 @@ struct diff_state {
 	bool adding_describe_ref;
 	bool highlight;
 	bool stage;
+	bool from_blame;
 	unsigned int parents;
 	const char *file;
 	unsigned int lineno;
 	struct position pos;
+	struct argv_env commit_env;
 	struct io view_io;
 };
 

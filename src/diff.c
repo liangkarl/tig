@@ -33,8 +33,17 @@ diff_open(struct view *view, enum open_flags flags)
 			"%(commit)", "--", "%(fileargs)", NULL
 	};
 	enum status_code code;
+	struct diff_state *state = view->private;
 
-	diff_save_line(view, view->private, flags);
+	argv_env_copy_commit_info(&state->commit_env, view->env);
+	diff_save_line(view, state, flags);
+	if (view->env->blame_lineno) {
+		state->file = get_path(view->env->file);
+		state->lineno = view->env->blame_lineno;
+		state->pos.offset = 0;
+		state->from_blame = true;
+		view->env->blame_lineno = 0;
+	}
 
 	code = begin_update(view, NULL, diff_argv, flags | OPEN_WITH_STDERR);
 	if (code != SUCCESS)
@@ -553,15 +562,10 @@ diff_read(struct view *view, struct buffer *buf, bool force_stop)
 			}
 		}
 
-		if (view->env->blame_lineno) {
-			state->file = get_path(view->env->file);
-			state->lineno = view->env->blame_lineno;
-			state->pos.offset = 0;
+		if (state->from_blame) {
 			state->pos.lineno = view->lines - 1;
-
-			view->env->blame_lineno = 0;
+			state->from_blame = false;
 		}
-
 		diff_restore_line(view, state);
 
 		if (!state->adding_describe_ref && !ref_list_contains_tag(view->vid)) {
@@ -871,12 +875,11 @@ bool
 diff_select_path(struct view *view, struct line *line)
 {
 	const char *file = diff_get_pathname(view, line, false);
-	const char *old_file;
+	const char *old_file = NULL;
 	char stat_path[SIZEOF_STR];
+	unsigned long lineno = 0;
+	unsigned long lineno_old = 0;
 
-	view->env->file[0] = '\0';
-	view->env->file_old[0] = '\0';
-	view->env->lineno = view->env->goto_lineno = view->env->lineno_old = 0;
 	if (!file && line->type == LINE_DIFF_STAT) {
 		const char *text = box_text(line);
 		const char *end = strstr(text, " |");
@@ -891,20 +894,23 @@ diff_select_path(struct view *view, struct line *line)
 			file = stat_path;
 		}
 	}
-	if (!file)
+	if (!file) {
+		argv_env_set_file_info(view->env, NULL, NULL, 0, 0, NULL);
+		view->env->goto_lineno = 0;
 		return false;
+	}
 
 	old_file = diff_get_pathname(view, line, true);
-	if (old_file)
-		string_format(view->env->file_old, "%s", old_file);
-	string_format(view->env->file, "%s", file);
 	if (line->type != LINE_DIFF_STAT) {
-		view->env->lineno = view->env->goto_lineno = diff_get_lineno(view, line, false);
+		lineno = diff_get_lineno(view, line, false);
+		lineno_old = diff_get_lineno(view, line, true);
+	}
+	argv_env_set_file_info(view->env, file, old_file, lineno, lineno_old, NULL);
+	view->env->goto_lineno = lineno;
+	if (line->type != LINE_DIFF_STAT) {
 		if (view->env->goto_lineno > 0)
 			view->env->goto_lineno--;
-		view->env->lineno_old = diff_get_lineno(view, line, true);
 	}
-	view->env->blob[0] = '\0';
 	return true;
 }
 
@@ -912,6 +918,7 @@ static void
 diff_select(struct view *view, struct line *line)
 {
 	diff_common_select(view, line, "Changes");
+	argv_env_copy_commit_info(view->env, &((struct diff_state *) view->private)->commit_env);
 }
 
 static struct view_ops diff_ops = {

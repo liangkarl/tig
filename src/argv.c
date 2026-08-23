@@ -502,9 +502,38 @@ argv_format(struct argv_env *argv_env, const char ***dst_argv, const char *src_a
 }
 
 void
-argv_env_set_authors(struct argv_env *argv_env,
-		     const struct ident *author, const struct time *author_time,
-		     const struct ident *committer, const struct time *commit_time)
+argv_env_clear_selection(struct argv_env *argv_env)
+{
+	argv_env_set_file_info(argv_env, NULL, NULL, 0, 0, NULL);
+	argv_env->status[0] = 0;
+	argv_env->author[0] = 0;
+	argv_env->author_email[0] = 0;
+	argv_env->author_date[0] = 0;
+	argv_env->committer[0] = 0;
+	argv_env->committer_email[0] = 0;
+	argv_env->commit_date[0] = 0;
+}
+
+void
+argv_env_copy_commit_info(struct argv_env *dst, const struct argv_env *src)
+{
+	string_copy_rev(dst->commit, src->commit);
+	string_copy(dst->branch, src->branch);
+	string_copy(dst->remote, src->remote);
+	string_copy(dst->tag, src->tag);
+	string_copy(dst->refname, src->refname);
+	string_copy(dst->author, src->author);
+	string_copy(dst->author_email, src->author_email);
+	string_copy(dst->author_date, src->author_date);
+	string_copy(dst->committer, src->committer);
+	string_copy(dst->committer_email, src->committer_email);
+	string_copy(dst->commit_date, src->commit_date);
+}
+
+void
+argv_env_set_commit_info(struct argv_env *argv_env, const char *commit,
+			 const struct ident *author, const struct time *author_time,
+			 const struct ident *committer, const struct time *commit_time)
 {
 	const char *author_name = author && author->name ? author->name : "";
 	const char *author_email = author && author->email ? author->email : "";
@@ -518,6 +547,16 @@ argv_env_set_authors(struct argv_env *argv_env,
 	if (!committer_date)
 		committer_date = "";
 
+	if (commit)
+		string_copy_rev(argv_env->commit, commit);
+	else
+		argv_env->commit[0] = 0;
+	argv_env->blob[0] = 0;
+	argv_env->status[0] = 0;
+	argv_env->tag[0] = 0;
+	argv_env->remote[0] = 0;
+	argv_env->branch[0] = 0;
+	argv_env->refname[0] = 0;
 	string_ncopy(argv_env->author, author_name, strlen(author_name));
 	string_ncopy(argv_env->author_email, author_email, strlen(author_email));
 	string_ncopy(argv_env->author_date, author_date, strlen(author_date));
@@ -526,8 +565,28 @@ argv_env_set_authors(struct argv_env *argv_env,
 	string_ncopy(argv_env->commit_date, committer_date, strlen(committer_date));
 }
 
+void
+argv_env_set_file_info(struct argv_env *argv_env, const char *file,
+		       const char *file_old, unsigned long lineno,
+		       unsigned long lineno_old, const char *text)
+{
+	string_ncopy(argv_env->file, file ? file : "", file ? strlen(file) : 0);
+	string_ncopy(argv_env->file_old, file_old ? file_old : "",
+		     file_old ? strlen(file_old) : 0);
+	string_ncopy(argv_env->text, text ? text : "", text ? strlen(text) : 0);
+	argv_env->lineno = lineno;
+	argv_env->lineno_old = lineno_old;
+	argv_env->blob[0] = 0;
+}
+
+void
+argv_env_set_ref(struct argv_env *argv_env, const char *ref)
+{
+	string_ncopy(argv_env->ref, ref ? ref : "", ref ? strlen(ref) : 0);
+}
+
 bool
-argv_env_set_commit(struct argv_env *argv_env, const char *commit_id)
+argv_env_load_commit_info(struct argv_env *argv_env, const char *commit_id)
 {
 	const char *show_argv[] = {
 		"git", "show", "--no-patch", "--no-notes",
@@ -543,12 +602,12 @@ argv_env_set_commit(struct argv_env *argv_env, const char *commit_id)
 	char *commit_date;
 
 	if (string_rev_is_null(commit_id)) {
-		argv_env_set_authors(argv_env, NULL, NULL, NULL, NULL);
+		argv_env_set_commit_info(argv_env, NULL, NULL, NULL, NULL, NULL);
 		return false;
 	}
 
+	argv_env_set_commit_info(argv_env, commit_id, NULL, NULL, NULL, NULL);
 	if (!io_run_buf(show_argv, author_line, sizeof(author_line), repo.exec_dir, false)) {
-		argv_env_set_authors(argv_env, NULL, NULL, NULL, NULL);
 		return false;
 	}
 
@@ -560,7 +619,6 @@ argv_env_set_commit(struct argv_env *argv_env, const char *commit_id)
 	commit_date = committer_email ? strchr(committer_email + 1, '\x1f') : NULL;
 
 	if (!email || !author_date || !committer || !committer_email || !commit_date) {
-		argv_env_set_authors(argv_env, NULL, NULL, NULL, NULL);
 		return false;
 	}
 

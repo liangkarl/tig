@@ -605,9 +605,9 @@ main_request(struct view *view, enum request request, struct line *line)
 
 	case REQ_VIEW_BLAME:
 		if (string_rev_is_null(commit->id))
-			view->env->ref[0] = 0;
+			argv_env_set_ref(view->env, NULL);
 		else
-			string_copy_rev(view->env->ref, commit->id);
+			argv_env_set_ref(view->env, commit->id);
 		return request;
 
 	case REQ_REFRESH:
@@ -649,9 +649,9 @@ main_select(struct view *view, struct line *line)
 	struct commit *commit = line->data;
 
 	if (line->type == LINE_STAT_STAGED || line->type == LINE_STAT_UNSTAGED || line->type == LINE_STAT_UNTRACKED) {
+		argv_env_set_commit_info(view->env, commit->id, NULL, NULL, NULL, NULL);
 		string_ncopy(view->ref, commit->title, strlen(commit->title));
 		status_stage_info(view->env->status, line->type, NULL);
-		argv_env_set_authors(view->env, NULL, NULL, NULL, NULL);
 	} else {
 		struct main_state *state = view->private;
 		const struct ref *ref = main_get_commit_refs(line, commit);
@@ -663,16 +663,11 @@ main_select(struct view *view, struct line *line)
 		} else {
 			string_copy_rev(view->ref, commit->id);
 		}
-		argv_env_set_authors(view->env, commit->author, &commit->author_time,
+		argv_env_set_commit_info(view->env, commit->id, commit->author, &commit->author_time,
 				     commit->committer, &commit->commit_time);
 		if (ref)
 			ref_update_env(view->env, ref, true);
-		else
-			view->env->tag[0] = view->env->remote[0] = view->env->branch[0] = view->env->refname[0] = 0;
-		view->env->status[0] = 0;
 	}
-	string_copy_rev(view->env->commit, commit->id);
-	view->env->blob[0] = 0;
 }
 
 static struct view_ops main_ops = {

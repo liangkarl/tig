@@ -136,10 +136,8 @@ blob_select(struct view *view, struct line *line)
 	struct blob_state *state = view->private;
 	const char *text = box_text(line);
 
-	if (state->file)
-		string_format(view->env->file, "%s", state->file);
-	view->env->lineno = view->pos.lineno + 1;
-	string_ncopy(view->env->text, text, strlen(text));
+	argv_env_set_file_info(view->env, state->file, NULL,
+			       view->pos.lineno + 1, 0, text);
 }
 
 static enum request
@@ -158,7 +156,7 @@ blob_request(struct view *view, enum request request, struct line *line)
 		return REQ_NONE;
 
 	case REQ_VIEW_BLAME:
-		string_ncopy(view->env->ref, state->commit, strlen(state->commit));
+		argv_env_set_ref(view->env, state->commit);
 		view->env->goto_lineno = line - view->line;
 		return request;
 

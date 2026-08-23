@@ -688,7 +688,7 @@ draw_view_line(struct view *view, unsigned int lineno)
 	if (selected) {
 		set_view_attr(view, view == display[current_view] ? LINE_CURSOR : LINE_CURSOR_BLUR);
 		line->selected = true;
-		view->ops->select(view, line);
+		view_select(view);
 	}
 
 	ok = view->ops->draw(view, line, lineno);

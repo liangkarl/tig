@@ -372,7 +372,7 @@ tree_request(struct view *view, enum request request, struct line *line)
 			return REQ_NONE;
 		}
 
-		string_copy(view->env->ref, view->vid);
+		argv_env_set_ref(view->env, view->vid);
 		return request;
 
 	case REQ_EDIT:
@@ -449,13 +449,15 @@ tree_select(struct view *view, struct line *line)
 
 	if (line->type == LINE_DIRECTORY && tree_path_is_parent(entry->name)) {
 		string_copy(view->ref, "Open parent directory");
-		view->env->blob[0] = 0;
 		return;
 	}
 
 	if (line->type == LINE_FILE) {
+		char file[SIZEOF_STR];
+
+		string_format(file, "%s%s", view->env->directory, tree_path(line));
+		argv_env_set_file_info(view->env, file, NULL, 0, 0, NULL);
 		string_copy_rev(view->env->blob, entry->id);
-		string_format(view->env->file, "%s%s", view->env->directory, tree_path(line));
 	}
 
 	string_copy_rev(view->ref, entry->id);

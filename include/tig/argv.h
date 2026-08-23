@@ -79,10 +79,18 @@ extern struct argv_env argv_env;
 
 struct ident;
 struct time;
-void argv_env_set_authors(struct argv_env *argv_env,
-			  const struct ident *author, const struct time *author_time,
-			  const struct ident *committer, const struct time *commit_time);
-bool argv_env_set_commit(struct argv_env *argv_env, const char *commit_id);
+/* Selection-scoped Git values. Command-line option expansions are owned by
+ * options.c and %(repo:*) values by repo.c, so neither belongs in this flow. */
+void argv_env_clear_selection(struct argv_env *argv_env);
+void argv_env_copy_commit_info(struct argv_env *dst, const struct argv_env *src);
+void argv_env_set_commit_info(struct argv_env *argv_env, const char *commit,
+			      const struct ident *author, const struct time *author_time,
+			      const struct ident *committer, const struct time *commit_time);
+void argv_env_set_file_info(struct argv_env *argv_env, const char *file,
+			    const char *file_old, unsigned long lineno,
+			    unsigned long lineno_old, const char *text);
+void argv_env_set_ref(struct argv_env *argv_env, const char *ref);
+bool argv_env_load_commit_info(struct argv_env *argv_env, const char *commit_id);
 
 enum argv_flag {
 	argv_flag_first = 1 << 0,

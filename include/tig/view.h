@@ -254,6 +254,7 @@ struct view *get_view(int index);
  */
 
 bool goto_view_line(struct view *view, unsigned long offset, unsigned long lineno);
+void view_select(struct view *view);
 void select_view_line(struct view *view, unsigned long lineno);
 void do_scroll_view(struct view *view, int lines);
 void scroll_view(struct view *view, enum request request);

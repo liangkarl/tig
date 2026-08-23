@@ -978,9 +978,9 @@ stage_request(struct view *view, enum request request, struct line *line)
 				string_ncopy(view->env->file, file, strlen(file));
 		}
 
-		view->env->ref[0] = 0;
+		argv_env_set_ref(view->env, NULL);
 		if (find_deleted_line_in_head(view, line))
-			string_copy(view->env->ref, "HEAD");
+			argv_env_set_ref(view->env, "HEAD");
 		else
 			view->env->goto_lineno = diff_get_lineno(view, line, false);
 		if (view->env->goto_lineno > 0)
@@ -1027,6 +1027,7 @@ stage_select(struct view *view, struct line *line)
 				: stage_line_type == LINE_STAT_UNSTAGED ? "Unstaged changes"
 				: NULL;
 
+	status_stage_info(view->env->status, stage_line_type, &stage_status);
 	diff_common_select(view, line, changes_msg);
 }
 

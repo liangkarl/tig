@@ -25,6 +25,21 @@
  * Navigation
  */
 
+void
+view_select(struct view *view)
+{
+	struct argv_env *env = view->env;
+
+	if (!view->lines)
+		return;
+
+	/* Reset line-owned variables before the view populates the values which
+	 * apply to its selected line. */
+	argv_env_clear_selection(env);
+
+	view->ops->select(view, &view->line[view->pos.lineno]);
+}
+
 bool
 goto_view_line(struct view *view, unsigned long offset, unsigned long lineno)
 {
@@ -280,7 +295,7 @@ move_view(struct view *view, enum request request)
 	if (!view_is_displayed(view)) {
 		view->pos.offset += scroll_steps;
 		assert(0 <= view->pos.offset && view->pos.offset < view->lines);
-		view->ops->select(view, &view->line[view->pos.lineno]);
+		view_select(view);
 		return;
 	}
 
@@ -315,7 +330,7 @@ select_view_line(struct view *view, unsigned long lineno)
 				wnoutrefresh(view->win);
 			}
 		} else {
-			view->ops->select(view, &view->line[view->pos.lineno]);
+			view_select(view);
 		}
 	}
 }
