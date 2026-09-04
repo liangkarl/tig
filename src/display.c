@@ -84,12 +84,23 @@ open_external_viewer(const char *argv[], const char *dir, bool silent, bool conf
 		ok = io_run_bg(argv, dir);
 
 	} else {
+		void (*sig_tstp)(int);
+
 		signal(SIGINT, SIG_IGN);
 		clear();
 		refresh();
 		endwin();                  /* restore original tty modes */
 		tcsetattr(opt_tty.fd, TCSAFLUSH, opt_tty.attr);
+		/*
+		 * Do not let ncurses handle a suspension intended for the
+		 * foreground command.  Its SIGCONT handling redraws tig while the
+		 * command is restoring its own screen, causing that redraw to become
+		 * the screen restored when tig eventually exits.
+		 */
+		sig_tstp = signal(SIGTSTP, SIG_DFL);
 		ok = io_run_fg(argv, dir, opt_tty.fd);
+		if (sig_tstp != SIG_ERR)
+			signal(SIGTSTP, sig_tstp);
 		if (confirm || !ok) {
 			if (!ok && *notice)
 				fprintf(stderr, "%s", notice);
