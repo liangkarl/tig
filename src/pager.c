@@ -138,6 +138,10 @@ pager_common_read(struct view *view, const char *data, enum line_type type, stru
 static bool
 pager_read(struct view *view, struct buffer *buf, bool force_stop)
 {
+	char *src;
+	char *cursor;
+	char *end;
+
 	if (opt_pager_autoscroll && view->pos.offset + view->height == view->lines - 1)
 		do_scroll_view(view, 1);
 
@@ -157,6 +161,20 @@ pager_read(struct view *view, struct buffer *buf, bool force_stop)
 
 		return true;
 	}
+
+	/* Render CR as a terminal does: move the cursor back to the start of
+	 * the line, so Git progress messages overwrite the previous update. */
+	for (src = cursor = end = buf->data; *src; src++) {
+		if (*src == '\r') {
+			cursor = buf->data;
+			continue;
+		}
+
+		*cursor++ = *src;
+		if (cursor > end)
+			end = cursor;
+	}
+	*end = '\0';
 
 	return diff_common_read(view, buf->data, view->private);
 }
