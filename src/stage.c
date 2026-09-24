@@ -428,10 +428,14 @@ stage_parse_diffstat_path(struct view *view, struct line *line, char *path, size
 	/* Git can replace any part of an overlong diffstat name with "...".
 	 * Only consult the header when an ellipsis is present: an actual path
 	 * beginning with dots is retained when it already matches the header. */
-	if (strstr(path, "...") &&
-	    (full_path = diff_get_pathname(view, line, false)) &&
-	    strcmp(path, full_path))
-		string_ncopy_do(path, pathsz, full_path, strlen(full_path));
+	if (strstr(path, "...")) {
+		full_path = diff_get_pathname(view, line, false);
+		/* A deleted file's new path is /dev/null; use its old path. */
+		if (full_path && !strcmp(full_path, "/dev/null"))
+			full_path = diff_get_pathname(view, line, true);
+		if (full_path && strcmp(path, full_path))
+			string_ncopy_do(path, pathsz, full_path, strlen(full_path));
+	}
 	return true;
 }
 
