@@ -1,0 +1,37 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+steps '
+	:/a.txt
+	:exec !assert-var [%(file)] == [a.txt]
+	:exec !assert-var [%(file_old)] == []
+	:exec !assert-var [%(lineno)] == [0]
+	:/b.txt
+	:exec !assert-var [%(file)] == [b.txt]
+	:exec !assert-var [%(file_old)] == []
+	:exec !assert-var [%(lineno)] == [0]
+	:/c.bin
+	:exec !assert-var [%(file)] == [c.bin]
+	:exec !assert-var [%(file_old)] == []
+	:exec !assert-var [%(lineno)] == [0]
+	:0
+	:exec !assert-var [%(file)] == []
+	:exec !assert-var [%(lineno)] == [0]
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add a.txt "1"
+in_work_dir git_add b.txt "1"
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir git_add a.txt "2"
+in_work_dir git_add b.txt "2"
+in_work_dir sh -c 'printf "\\x01\\x02" > c.bin'
+in_work_dir git add c.bin
+in_work_dir git_commit --author="$IDENT_A" --message="Update both files"
+
+test_tig log -1
+
+assert_vars 11
