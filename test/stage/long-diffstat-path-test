@@ -1,0 +1,33 @@
+#!/bin/sh
+
+. libtest.sh
+. libgit.sh
+
+long_path=directory_with_a_name_long_enough_to_make_git_abbreviate_the_diffstat/another_long_directory/file_with_a_long_name.txt
+
+steps '
+	:view-main
+	:1
+	:view-stage
+	:1
+	:exec !assert-var "%(file)" == "'$long_path'"
+	:status-update
+'
+
+in_work_dir git init -q .
+in_work_dir git_config
+in_work_dir git_add tracked base
+in_work_dir git_commit --author="$IDENT_A" --message="Initial commit"
+in_work_dir mkdir -p "$(dirname "$long_path")"
+in_work_dir sh -c 'printf "contents\n" > "$1"' sh "$long_path"
+in_work_dir git add "$long_path"
+
+test_tig status
+
+assert_vars 1
+
+in_work_dir git status --short > git-status.out
+
+assert_equals git-status.out <<EOF_STATUS
+?? directory_with_a_name_long_enough_to_make_git_abbreviate_the_diffstat/
+EOF_STATUS
