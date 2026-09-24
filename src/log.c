@@ -66,6 +66,7 @@ log_select(struct view *view, struct line *line)
 			state->author_id[0] = 0;
 	}
 	argv_env_copy_commit_info(view->env, &state->commit_env);
+	ref_update_env(view->env, get_ref_list(view->env->commit), true);
 
 	diff_select_path(view, line);
 

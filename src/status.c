@@ -895,7 +895,8 @@ status_select(struct view *view, struct line *line)
 	string_format(view->ref, text, key, file);
 	status_stage_info(view->env->status, line->type, status);
 	argv_env_set_file_info(view->env, status ? status->new.name : NULL,
-			       NULL, 0, 0, NULL);
+			       status && status->old.name[0] && strcmp(status->old.name, status->new.name)
+			       ? status->old.name : NULL, 0, 0, NULL);
 }
 
 static struct view_ops status_ops = {

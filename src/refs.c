@@ -261,6 +261,8 @@ refs_select(struct view *view, struct line *line)
 
 	if (refs_is_all(reference)) {
 		argv_env_set_commit_info(view->env, NULL, NULL, NULL, NULL, NULL);
+		argv_env_set_ref(view->env, NULL);
+		string_copy(view->env->head, "HEAD");
 		string_copy(view->ref, REFS_ALL_NAME);
 		return;
 	}

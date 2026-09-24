@@ -23,6 +23,8 @@
 
 struct blob_state {
 	char commit[SIZEOF_REF];
+	/* The displayed path also applies to blobs from historical commits. */
+	const char *path;
 	const char *file;
 };
 
@@ -106,6 +108,8 @@ blob_open(struct view *view, enum open_flags flags)
 		return error("No file chosen, press %s to open tree view",
 			     get_view_key(view, REQ_VIEW_TREE));
 
+	state->path = get_path(view->env->file);
+
 	view->encoding = get_path_encoding(view->env->file, default_encoding);
 
 	if (*view->env->file)
@@ -136,8 +140,10 @@ blob_select(struct view *view, struct line *line)
 	struct blob_state *state = view->private;
 	const char *text = box_text(line);
 
-	argv_env_set_file_info(view->env, state->file, NULL,
+	string_copy_rev(view->env->commit, state->commit);
+	argv_env_set_file_info(view->env, state->path, NULL,
 			       view->pos.lineno + 1, 0, text);
+	string_copy_rev(view->env->blob, view->vid);
 }
 
 static enum request

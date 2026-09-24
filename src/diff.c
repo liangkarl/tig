@@ -917,8 +917,19 @@ diff_select_path(struct view *view, struct line *line)
 static void
 diff_select(struct view *view, struct line *line)
 {
+	struct diff_state *state = view->private;
+	struct line *commit_line = find_prev_line_by_type(view, line, LINE_COMMIT);
+
+	if (commit_line) {
+		char commit[SIZEOF_REV];
+
+		string_copy_rev_from_commit_line(commit, box_text(commit_line));
+		if (strcmp(state->commit_env.commit, commit) || !state->commit_env.author[0])
+			argv_env_load_commit_info(&state->commit_env, commit);
+	}
 	diff_common_select(view, line, "Changes");
-	argv_env_copy_commit_info(view->env, &((struct diff_state *) view->private)->commit_env);
+	argv_env_copy_commit_info(view->env, &state->commit_env);
+	ref_update_env(view->env, get_ref_list(view->env->commit), true);
 }
 
 static struct view_ops diff_ops = {

@@ -508,7 +508,14 @@ argv_format(struct argv_env *argv_env, const char ***dst_argv, const char *src_a
 void
 argv_env_clear_selection(struct argv_env *argv_env)
 {
+	/* head, directory and ref are navigation context. Views without a
+	 * commit selection also inherit commit for opening another Git view. */
 	argv_env_set_file_info(argv_env, NULL, NULL, 0, 0, NULL);
+	argv_env->branch[0] = 0;
+	argv_env->remote[0] = 0;
+	argv_env->tag[0] = 0;
+	argv_env->refname[0] = 0;
+	argv_env->stash[0] = 0;
 	argv_env->status[0] = 0;
 	argv_env->author[0] = 0;
 	argv_env->author_email[0] = 0;
@@ -521,11 +528,12 @@ argv_env_clear_selection(struct argv_env *argv_env)
 void
 argv_env_copy_commit_info(struct argv_env *dst, const struct argv_env *src)
 {
-	string_copy_rev(dst->commit, src->commit);
+	string_copy(dst->commit, src->commit);
 	string_copy(dst->branch, src->branch);
 	string_copy(dst->remote, src->remote);
 	string_copy(dst->tag, src->tag);
 	string_copy(dst->refname, src->refname);
+	string_copy(dst->stash, src->stash);
 	string_copy(dst->author, src->author);
 	string_copy(dst->author_email, src->author_email);
 	string_copy(dst->author_date, src->author_date);
@@ -549,7 +557,7 @@ argv_env_set_commit_info(struct argv_env *argv_env, const char *commit,
 	if (!author_date)
 		author_date = "";
 
-	if (commit)
+	if (commit && *commit)
 		string_copy_rev(argv_env->commit, commit);
 	else
 		argv_env->commit[0] = 0;

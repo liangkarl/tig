@@ -30,12 +30,13 @@ view_select(struct view *view)
 {
 	struct argv_env *env = view->env;
 
-	if (!view->lines)
-		return;
-
 	/* Reset line-owned variables before the view populates the values which
 	 * apply to its selected line. */
 	argv_env_clear_selection(env);
+	if (!view->lines) {
+		env->commit[0] = 0;
+		return;
+	}
 
 	view->ops->select(view, &view->line[view->pos.lineno]);
 }

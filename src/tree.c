@@ -442,6 +442,8 @@ tree_select(struct view *view, struct line *line)
 {
 	struct tree_entry *entry = line->data;
 
+	string_copy_rev(view->env->commit, view->vid);
+
 	if (line->type == LINE_HEADER) {
 		string_format(view->ref, "Files in /%s", view->env->directory);
 		return;

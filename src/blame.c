@@ -493,7 +493,10 @@ blame_select(struct view *view, struct line *line)
 	struct blame_commit *commit = blame->commit;
 	const char *text = blame->text;
 
+	argv_env_set_ref(view->env, state->history_state.id);
 	if (!commit) {
+		argv_env_set_file_info(view->env, state->history_state.filename,
+				       NULL, view->pos.lineno + 1, 0, text);
 		argv_env_set_commit_info(view->env, NULL, NULL, NULL, NULL, NULL);
 		return;
 	}
