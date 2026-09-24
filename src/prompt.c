@@ -250,8 +250,10 @@ readline_variable_generator(const char *text, int state)
 		if (strncmp(name, text, len) == 0) {
 			if (strlen(name) > len)
 				variable = strdup(name);
-			else
+			else {
+				view_select(display[current_view]);
 				variable = argv_format_arg(&argv_env, text);
+			}
 			break;
 		}
 	}
@@ -989,6 +991,8 @@ run_prompt_command(struct view *view, const char *argv[])
 		struct view *next = &pager_view;
 		bool copied;
 
+		view_select(view);
+
 		/* Trim the leading '!'. */
 		argv[0] = cmd + 1;
 		copied = argv_format(view->env, &next->argv, argv, argv_flag_file_filter | argv_flag_rev_filter);
@@ -1017,6 +1021,8 @@ run_prompt_command(struct view *view, const char *argv[])
 	} else if (!strcmp(cmd, "echo")) {
 		const char **fmt_argv = NULL;
 		char text[SIZEOF_STR] = "";
+
+		view_select(view);
 
 		if (argv[1]
 		    && strlen(argv[1]) > 0
@@ -1144,6 +1150,10 @@ exec_run_request(struct view *view, struct run_request *req)
 	/* req may be invalid after run_prompt_command if run_request
 	 * is reallocated, so use a copy of the flags. */
 	struct run_request_flags req_flags = req->flags;
+
+	/* A background view may have refreshed the shared environment. Restore
+	 * the active selection before expanding command arguments. */
+	view_select(view);
 
 	if (!argv_to_string(req->argv, cmd, sizeof(cmd), " ")
 	    || !argv_from_string_no_quotes(req_argv, &req_argc, cmd)

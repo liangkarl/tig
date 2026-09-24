@@ -333,7 +333,7 @@ format_expand_arg(struct format_context *format, const char *name, const char *e
 		if (string_enum_compare(name, vars[i].name, vars[i].namelen))
 			continue;
 
-		if (vars[i].value_ref == &argv_env.file && !(format->argv_flags & argv_flag_file_filter))
+		if (!strcmp(vars[i].name, "%(file)") && !(format->argv_flags & argv_flag_file_filter))
 			return true;
 
 		return vars[i].formatter(format, &vars[i]);
@@ -438,19 +438,23 @@ repo_rev_formatter(struct format_context *format, struct format_var *var)
 bool
 argv_format(struct argv_env *argv_env, const char ***dst_argv, const char *src_argv[], int flags)
 {
+	/* A %(prompt) can process background view updates. Expand the whole
+	 * command from one consistent snapshot of the browsing state. */
+	struct argv_env env_snapshot = *argv_env;
+	struct repo_info repo_snapshot = repo;
 	struct format_var vars[] = {
 #define FORMAT_VAR(type, name, ifempty, initval) \
-	{ "%(" #name ")", STRING_SIZE("%(" #name ")"), type ## _formatter, &argv_env->name, ifempty },
+	{ "%(" #name ")", STRING_SIZE("%(" #name ")"), type ## _formatter, &env_snapshot.name, ifempty },
 		ARGV_ENV_INFO(FORMAT_VAR)
 #define FORMAT_REPO_VAR(type, name) \
-	{ "%(repo:" #name ")", STRING_SIZE("%(repo:" #name ")"), type ## _formatter, &repo.name, "" },
+	{ "%(repo:" #name ")", STRING_SIZE("%(repo:" #name ")"), type ## _formatter, &repo_snapshot.name, "" },
 		REPO_INFO(FORMAT_REPO_VAR)
-		{ "%(author)", STRING_SIZE("%(author)"), argv_string_formatter, &argv_env->author, "" },
-		{ "%(author-email)", STRING_SIZE("%(author-email)"), argv_string_formatter, &argv_env->author_email, "" },
-		{ "%(author-date)", STRING_SIZE("%(author-date)"), argv_string_formatter, &argv_env->author_date, "" },
-		{ "%(committer)", STRING_SIZE("%(committer)"), argv_string_formatter, &argv_env->committer, "" },
-		{ "%(committer-email)", STRING_SIZE("%(committer-email)"), argv_string_formatter, &argv_env->committer_email, "" },
-		{ "%(commit-date)", STRING_SIZE("%(commit-date)"), argv_string_formatter, &argv_env->commit_date, "" },
+		{ "%(author)", STRING_SIZE("%(author)"), argv_string_formatter, &env_snapshot.author, "" },
+		{ "%(author-email)", STRING_SIZE("%(author-email)"), argv_string_formatter, &env_snapshot.author_email, "" },
+		{ "%(author-date)", STRING_SIZE("%(author-date)"), argv_string_formatter, &env_snapshot.author_date, "" },
+		{ "%(committer)", STRING_SIZE("%(committer)"), argv_string_formatter, &env_snapshot.committer, "" },
+		{ "%(committer-email)", STRING_SIZE("%(committer-email)"), argv_string_formatter, &env_snapshot.committer_email, "" },
+		{ "%(commit-date)", STRING_SIZE("%(commit-date)"), argv_string_formatter, &env_snapshot.commit_date, "" },
 	};
 	struct format_context format = { vars, ARRAY_SIZE(vars), "", 0, flags };
 	int argc;
