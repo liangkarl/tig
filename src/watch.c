@@ -215,8 +215,13 @@ watch_update_event(enum watch_event event, enum watch_trigger trigger,
 	if (watch_no_refresh(event))
 		return WATCH_NONE;
 
-	if (event == WATCH_EVENT_AFTER_COMMAND)
+	if (event == WATCH_EVENT_AFTER_COMMAND) {
 		timestamp = time(NULL);
+		/* Repository expansions must refresh even when the displayed view
+		 * has no watch (for example, a standalone blob or pager). */
+		if (*repo.git_dir)
+			load_refs(true);
+	}
 
 	for (i = 0; i < ARRAY_SIZE(watch_handlers); i++) {
 		struct watch_handler *handler = &watch_handlers[i];

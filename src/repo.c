@@ -77,9 +77,6 @@ read_repo_info(char *name, size_t namelen, char *value, size_t valuelen, void *d
 		state->argv++;
 
 	} else if (!strcmp(arg, REPO_INFO_REMOTE)) {
-		char *sep = strchr(name, '/');
-
-		string_ncopy(repo.remote, name, sep - name);
 		string_ncopy(repo.upstream, name, namelen);
 		state->argv++;
 	}
@@ -113,6 +110,10 @@ load_repo_info(void)
 enum status_code
 load_repo_head(void)
 {
+	char remote_key[SIZEOF_STR];
+	const char *config_remote_argv[] = {
+		"git", "config", "--get", remote_key, NULL
+	};
 	const char *rev_parse_remote_argv[] = {
 		"git", "rev-parse", REPO_INFO_REMOTE, "@{upstream}", NULL
 	};
@@ -120,13 +121,21 @@ load_repo_head(void)
 		"git", "rev-parse", REPO_INFO_RESOLVED_HEAD,
 			REPO_INFO_SYMBOLIC_HEAD, "HEAD", NULL
 	};
+	enum status_code code;
 
 	memset(repo.remote, 0, sizeof(repo.remote));
 	memset(repo.upstream, 0, sizeof(repo.upstream));
-	reload_repo_info(rev_parse_remote_argv);
 	memset(repo.head, 0, sizeof(repo.head));
 	memset(repo.head_id, 0, sizeof(repo.head_id));
-	return reload_repo_info(rev_parse_argv);
+	code = reload_repo_info(rev_parse_argv);
+	if (*repo.head) {
+		reload_repo_info(rev_parse_remote_argv);
+		/* Upstreams can be local branches, and remote names can contain
+		 * slashes. Read the remote name instead of splitting the ref. */
+		if (string_format(remote_key, "branch.%s.remote", repo.head))
+			io_run_buf(config_remote_argv, repo.remote, sizeof(repo.remote), NULL, false);
+	}
+	return code;
 }
 
 struct repo_info repo;

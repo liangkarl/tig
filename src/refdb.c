@@ -22,6 +22,7 @@
 
 static struct ref *refs_head = NULL;
 static size_t refs_tags;
+static const char **remote_names;
 
 DEFINE_STRING_MAP(refs_by_name, struct ref *, name, 32)
 DEFINE_STRING_MAP(refs_by_id, struct ref *, id, 16)
@@ -325,9 +326,16 @@ cleanup_refs(void *data, void *ref_)
 }
 
 static enum status_code
-reload_refs(bool force)
+read_remote_name(char *name, size_t namelen, char *value, size_t valuelen, void *data)
+{
+	return argv_appendn(&remote_names, name, namelen) ? SUCCESS : ERROR_OUT_OF_MEMORY;
+}
+
+static enum status_code
+reload_refs(void)
 {
 	struct io io;
+	const char *remote_argv[] = { "git", "remote", NULL };
 	const char *ls_remote_argv[SIZEOF_ARG] = {
 		"git", "show-ref", "--head", "--dereference", NULL
 	};
@@ -348,8 +356,9 @@ reload_refs(bool force)
 	if (!*repo.git_dir)
 		return SUCCESS;
 
-	if (force || !*repo.head)
-		load_repo_head();
+	load_repo_head();
+	argv_free(remote_names);
+	io_run_load(&io, remote_argv, "\n", read_remote_name, NULL);
 
 	if (strcmp(old_repo.head, repo.head))
 		opt.changed |= WATCH_HEAD;
@@ -380,7 +389,7 @@ load_refs(bool force)
 		return SUCCESS;
 
 	loaded = true;
-	return reload_refs(force);
+	return reload_refs();
 }
 
 enum status_code
@@ -415,6 +424,18 @@ ref_update_env(struct argv_env *env, const struct ref *ref, bool recurse)
 
 	} else if (ref_is_remote(ref)) {
 		const char *sep = strchr(ref->name, '/');
+		size_t remote_len = 0;
+		int i;
+
+		for (i = 0; remote_names && remote_names[i]; i++) {
+			size_t len = strlen(remote_names[i]);
+
+			if (len > remote_len && !strncmp(ref->name, remote_names[i], len)
+			    && ref->name[len] == '/') {
+				remote_len = len;
+				sep = ref->name + len;
+			}
+		}
 
 		if (!sep)
 			return;
