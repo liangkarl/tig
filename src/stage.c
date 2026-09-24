@@ -510,7 +510,56 @@ stage_update_current_file(struct view *view, struct line *cur)
 }
 
 static bool
-stage_update(struct view *view, struct line *line, update_t update_type)
+stage_update_files(struct view *view, enum line_type type)
+{
+	struct line *line;
+
+	if (view->parent == &status_view) {
+		view = view->parent;
+		line = find_next_line_by_type(view, view->line, type);
+		return line && status_update_files(view, line + 1);
+	}
+
+	bool updated = false;
+	struct line *hdr = view->line;
+
+	while ((hdr = find_next_line_by_type(view, hdr, LINE_DIFF_HEADER))) {
+		struct line *next_hdr;
+		struct line *chunk;
+		struct line *end;
+
+		next_hdr = find_next_line_by_type(view, hdr + 1, LINE_DIFF_HEADER);
+		end = next_hdr ? next_hdr : view->line + view->lines;
+		chunk = find_next_line_by_type(view, hdr + 1, LINE_DIFF_CHUNK);
+
+		if (!chunk || chunk >= end) {
+			if (!stage_update_file_no_chunk(hdr, end)) {
+				report("Failed to update file");
+				return false;
+			}
+			updated = true;
+		} else {
+			for (line = chunk; line && line < end;
+		     line = find_next_line_by_type(view, line + 1, LINE_DIFF_CHUNK)) {
+				if (!stage_apply_chunk(view, line, NULL, false, UPDATE_NORMAL)) {
+					report("Failed to apply chunk");
+					return false;
+				}
+				updated = true;
+			}
+		}
+
+		if (!next_hdr)
+			break;
+
+		hdr = next_hdr;
+	}
+
+	return updated;
+}
+
+static bool
+stage_update(struct view *view, struct line *line, update_t update_type, bool update_all_files)
 {
 	struct line *chunk = NULL;
 
@@ -524,7 +573,11 @@ stage_update(struct view *view, struct line *line, update_t update_type)
 		}
 
 	} else if (!stage_status.status) {
-		if (!stage_update_current_file(view, line)) {
+		bool updated = update_all_files
+			? stage_update_files(view, stage_line_type)
+			: stage_update_current_file(view, line);
+
+		if (!updated) {
 			report("Failed to update files");
 			return false;
 		}
@@ -809,7 +862,12 @@ stage_request(struct view *view, enum request request, struct line *line)
 {
 	switch (request) {
 	case REQ_STATUS_UPDATE:
-		if (!stage_update(view, line, UPDATE_NORMAL))
+		if (!stage_update(view, line, UPDATE_NORMAL, false))
+			return REQ_NONE;
+		break;
+
+	case REQ_STATUS_UPDATE_ALL:
+		if (!stage_update(view, line, UPDATE_NORMAL, true))
 			return REQ_NONE;
 		break;
 
@@ -832,7 +890,7 @@ stage_request(struct view *view, enum request request, struct line *line)
 			report("Staging is not supported for wrapped lines");
 			return REQ_NONE;
 		}
-		if (!stage_update(view, line, UPDATE_SINGLE_LINE))
+		if (!stage_update(view, line, UPDATE_SINGLE_LINE, false))
 			return REQ_NONE;
 		break;
 
@@ -851,7 +909,7 @@ stage_request(struct view *view, enum request request, struct line *line)
 			report("Staging is not supported for wrapped lines");
 			return REQ_NONE;
 		}
-		if (!stage_update(view, line, UPDATE_PART))
+		if (!stage_update(view, line, UPDATE_PART, false))
 			return REQ_NONE;
 		break;
 

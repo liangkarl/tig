@@ -66,7 +66,7 @@ steps '
 	:save-display unstaged-changes-staged-bc-last-chunk.screen
 
 	:4
-	:status-update
+	:status-update-all
 	:save-display unstaged-changes-staged-all.screen
 '
 
