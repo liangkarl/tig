@@ -544,12 +544,10 @@ argv_env_set_commit_info(struct argv_env *argv_env, const char *commit,
 	const char *author_date = author_time ? mkdate(author_time, DATE_CUSTOM, false, "%Y-%m-%d %H:%M:%S %z") : "";
 	const char *committer_name = committer && committer->name ? committer->name : "";
 	const char *committer_email = committer && committer->email ? committer->email : "";
-	const char *committer_date = commit_time ? mkdate(commit_time, DATE_CUSTOM, false, "%Y-%m-%d %H:%M:%S %z") : "";
+	const char *committer_date;
 
 	if (!author_date)
 		author_date = "";
-	if (!committer_date)
-		committer_date = "";
 
 	if (commit)
 		string_copy_rev(argv_env->commit, commit);
@@ -564,6 +562,11 @@ argv_env_set_commit_info(struct argv_env *argv_env, const char *commit,
 	string_ncopy(argv_env->author, author_name, strlen(author_name));
 	string_ncopy(argv_env->author_email, author_email, strlen(author_email));
 	string_ncopy(argv_env->author_date, author_date, strlen(author_date));
+	/* mkdate() reuses a static buffer; copy the author date before formatting
+	 * the committer date. */
+	committer_date = commit_time ? mkdate(commit_time, DATE_CUSTOM, false, "%Y-%m-%d %H:%M:%S %z") : "";
+	if (!committer_date)
+		committer_date = "";
 	string_ncopy(argv_env->committer, committer_name, strlen(committer_name));
 	string_ncopy(argv_env->committer_email, committer_email, strlen(committer_email));
 	string_ncopy(argv_env->commit_date, committer_date, strlen(committer_date));
@@ -594,7 +597,8 @@ argv_env_load_commit_info(struct argv_env *argv_env, const char *commit_id)
 {
 	const char *show_argv[] = {
 		"git", "show", "--no-patch", "--no-notes",
-		"--format=%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI",
+		"--date=format:%Y-%m-%d %H:%M:%S %z",
+		"--format=%an%x1f%ae%x1f%ad%x1f%cn%x1f%ce%x1f%cd",
 		commit_id, NULL
 	};
 	char author_line[SIZEOF_STR];
